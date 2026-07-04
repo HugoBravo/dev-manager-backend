@@ -40,7 +40,7 @@ it('rejects /api/auth/login with invalid credentials', function (): void {
         ->assertJsonValidationErrors(['email']);
 });
 
-it('revokes an existing token when authenticated via DELETE /api/auth/token/{tokenId}', function (): void {
+it('revokes an existing token when authenticated via DELETE /api/auth/tokens/{tokenId}', function (): void {
     $user = User::factory()->create();
     $plain = $user->createToken('cli')->plainTextToken;
 
@@ -48,14 +48,14 @@ it('revokes an existing token when authenticated via DELETE /api/auth/token/{tok
 
     $response = $this->withToken($plain)
         ->withHeader('Accept', 'application/json')
-        ->deleteJson("/api/auth/token/{$tokenId}");
+        ->deleteJson("/api/auth/tokens/{$tokenId}");
 
     $response->assertNoContent();
     expect($user->fresh()->tokens)->toHaveCount(0);
 });
 
 it('rejects token revocation when unauthenticated', function (): void {
-    $response = $this->deleteJson('/api/auth/token/1');
+    $response = $this->deleteJson('/api/auth/tokens/1');
     $response->assertUnauthorized();
 });
 

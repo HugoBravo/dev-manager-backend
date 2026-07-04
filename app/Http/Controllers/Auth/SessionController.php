@@ -44,4 +44,15 @@ final class SessionController extends Controller
 
         return response()->noContent();
     }
+
+    public function revokeToken(Request $request, int $tokenId): Response
+    {
+        $token = $request->user()?->tokens()->where('id', $tokenId)->first();
+
+        if ($token !== null) {
+            $token->delete();
+        }
+
+        return response()->noContent();
+    }
 }

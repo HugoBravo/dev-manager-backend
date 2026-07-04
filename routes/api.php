@@ -2,7 +2,6 @@
 
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\SessionController;
-use App\Http\Controllers\Auth\TokenController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -38,7 +37,7 @@ Route::post('/auth/logout', [SessionController::class, 'destroy'])
     ->name('auth.logout');
 
 // REMOVED in this migration: POST /auth/token (K1 — redundant with /auth/login).
-// Kept: DELETE /auth/token/{tokenId} for multi-device PAT revocation.
-Route::delete('/auth/token/{tokenId}', [TokenController::class, 'destroy'])
+// Per-device PAT revocation: DELETE /auth/tokens/{tokenId}.
+Route::delete('/auth/tokens/{tokenId}', [SessionController::class, 'revokeToken'])
     ->middleware('auth:sanctum')
-    ->name('auth.token.destroy');
+    ->name('auth.tokens.destroy');
