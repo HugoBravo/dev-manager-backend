@@ -27,28 +27,6 @@ body:json {
   }
 }
 
-docs {
-  # Happy-path self-registration.
-
-  Backend behavior (`auth-register-2026`):
-  - Creates the user with `email_verified_at = now()`.
-  - Hashes the password via the model cast (`'password' => 'hashed'`).
-  - Auto-logs the user in via `Auth::guard('web')->login()` and
-    regenerates the session id.
-  - Returns 201 Created with the `UserResource` envelope
-    `{ data: { id, name, email, email_verified_at } }`.
-
-  Bruno also captures the resulting user id into the `userId` env var
-  so the integration request (07) can reuse it.
-
-  Expected: 201, `data.id`, `data.email`, `data.email_verified_at`
-  present; `laravel_session` cookie rotated.
-
-  Pitfall: if `registerEmail` already exists in the DB, this will
-  return 422 with `errors.email`. Change the env var or seed a fresh
-  user before retrying.
-}
-
 script:post-response {
   try {
     const body = res.getBody();
@@ -58,4 +36,26 @@ script:post-response {
   } catch (e) {
     // ignore — body might be empty for non-2xx responses
   }
+}
+
+docs {
+  # Happy-path self-registration.
+  
+  Backend behavior (`auth-register-2026`):
+  - Creates the user with `email_verified_at = now()`.
+  - Hashes the password via the model cast (`'password' => 'hashed'`).
+  - Auto-logs the user in via `Auth::guard('web')->login()` and
+    regenerates the session id.
+  - Returns 201 Created with the `UserResource` envelope
+    `{ data: { id, name, email, email_verified_at } }`.
+  
+  Bruno also captures the resulting user id into the `userId` env var
+  so the integration request (07) can reuse it.
+  
+  Expected: 201, `data.id`, `data.email`, `data.email_verified_at`
+  present; `laravel_session` cookie rotated.
+  
+  Pitfall: if `registerEmail` already exists in the DB, this will
+  return 422 with `errors.email`. Change the env var or seed a fresh
+  user before retrying.
 }
