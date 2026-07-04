@@ -1,0 +1,49 @@
+meta {
+  name: 01 - issue personal token
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/auth/token
+  body: json
+  auth: none
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+  Origin: {{spaOrigin}}
+}
+
+body:json {
+  {
+    "email": "{{email}}",
+    "password": "{{password}}",
+    "device_name": "bruno-cli"
+  }
+}
+
+docs {
+  # Issue a Sanctum personal access token.
+
+  The route is throttled at 10 attempts per minute. After this response
+  we have a bearer token to use against other API endpoints without the
+  SPA cookie dance.
+
+  Expected: 200 OK with `{ token: "id|secret", abilities: [...] }`.
+}
+
+script:post-response {
+  try {
+    const body = res.getBody();
+    if (body && body.token) {
+      const [id, secret] = String(body.token).split("|");
+      bru.setEnvVar("personalToken", String(body.token));
+      bru.setEnvVar("personalTokenId", id);
+      bru.setEnvVar("personalTokenSecret", secret);
+    }
+  } catch (e) {
+    // ignore parse errors
+  }
+}

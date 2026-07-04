@@ -1,0 +1,31 @@
+meta {
+  name: 03 - revoke personal token
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/api/auth/token/{{personalTokenId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{personalToken}}
+}
+
+headers {
+  Accept: application/json
+  Origin: {{spaOrigin}}
+}
+
+docs {
+  # Revoke the personal token issued in 01.
+
+  The route path uses `{tokenId}` which is the numeric id column from
+  the personal_access_tokens table (NOT the plain-text portion of the
+  bearer token). We save it via the post-response in `01-issue-token`.
+
+  Expected: 204 No Content. After this, re-running 02 against /api/user
+  with the same bearer token must return 401.
+}

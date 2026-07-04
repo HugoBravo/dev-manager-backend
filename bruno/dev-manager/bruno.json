@@ -1,0 +1,11 @@
+{
+  "version": "1",
+  "name": "dev-manager",
+  "type": "collection",
+  "description": "Laravel 13 BE (Sanctum SPA + personal tokens) API for the dev-manager project. Sibling project to an Angular 22 SPA. Backend-only auth flows: csrf bootstrap, register, login, logout, /api/user (cookie + bearer), personal access tokens (issue + revoke), CORS preflight, negative cases.",
+  "ignore": [
+    "node_modules",
+    ".git",
+    ".DS_Store"
+  ]
+}

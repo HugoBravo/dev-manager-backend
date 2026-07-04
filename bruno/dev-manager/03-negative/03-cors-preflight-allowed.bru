@@ -1,0 +1,28 @@
+meta {
+  name: 03 - cors preflight allowed origin
+  type: http
+  seq: 3
+}
+
+options {
+  url: {{baseUrl}}/api/user
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+  Origin: {{spaOrigin}}
+  Access-Control-Request-Method: GET
+  Access-Control-Request-Headers: X-XSRF-TOKEN
+}
+
+docs {
+  # CORS: preflight from an allowed stateful origin must echo it back.
+
+  The expected response headers:
+  - `Access-Control-Allow-Origin: http://localhost:4200` (echo of Origin)
+  - `Access-Control-Allow-Credentials: true`
+
+  Expected: 200/204 with the two CORS headers above.
+}

@@ -1,0 +1,29 @@
+meta {
+  name: 04 - cors preflight disallowed origin
+  type: http
+  seq: 4
+}
+
+options {
+  url: {{baseUrl}}/api/user
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+  Origin: http://evil.example.com
+  Access-Control-Request-Method: GET
+}
+
+docs {
+  # CORS: preflight from a NON-stateful origin must NOT echo it back.
+
+  If the server accidentally echoes `http://evil.example.com`, that means
+  `SANCTUM_STATEFUL_DOMAINS` was widened or the `config/cors.php`
+  `allowed_origins` array was crafted with a wildcard. Stop and fix that
+  before touching anything else.
+
+  Expected: the `Access-Control-Allow-Origin` header must NOT be set to
+  the disallowed origin. Most browsers will block the request client-side.
+}
