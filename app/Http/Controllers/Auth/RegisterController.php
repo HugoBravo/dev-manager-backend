@@ -9,7 +9,6 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
 
 final class RegisterController extends Controller
 {
@@ -25,11 +24,12 @@ final class RegisterController extends Controller
 
         $user->forceFill(['email_verified_at' => now()])->save();
 
-        Auth::guard('web')->login($user);
-        $request->session()->regenerate();
+        $deviceName = (string) $request->input('device_name', 'unknown');
+        $token = $user->createToken($deviceName);
 
-        return UserResource::make($user)
-            ->response()
-            ->setStatusCode(201);
+        return response()->json([
+            'user' => (new UserResource($user))->resolve(),
+            'token' => $token->plainTextToken,
+        ], 201);
     }
 }

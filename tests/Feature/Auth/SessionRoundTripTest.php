@@ -7,42 +7,39 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-it('persists session across sequential requests with XSRF cookie', function (): void {
-    $user = User::factory()->create([
-        'email' => 'jane@example.com',
-        'password' => bcrypt('password'),
-    ]);
-
-    $csrfResponse = $this->get('/sanctum/csrf-cookie');
-    $csrfResponse->assertNoContent();
-    $xsrf = null;
-    foreach ($csrfResponse->headers->getCookies() as $cookie) {
-        if ($cookie->getName() === 'XSRF-TOKEN') {
-            $xsrf = $cookie->getValue();
-            break;
-        }
-    }
-    expect($xsrf)->not->toBeNull();
-
-    $login = $this->withHeaders([
-        'Origin' => 'http://localhost:4200',
-        'X-XSRF-TOKEN' => $xsrf,
-    ])->postJson('/api/auth/login', [
+it('completes a bearer-token round trip: register → user → logout → revoked', function (): void {
+    $registerResponse = $this->postJson('/api/auth/register', [
+        'name' => 'Jane Demo',
         'email' => 'jane@example.com',
         'password' => 'password',
+        'password_confirmation' => 'password',
         'device_name' => 'spa',
-    ]);
+    ])->assertStatus(201);
 
-    $login->assertOk();
+    $token = $registerResponse->json('token');
+    expect($token)->toBeString()->toMatch('/^\d+\|[A-Za-z0-9]+$/');
 
-    $userResponse = $this->getJson('/api/user');
-    $userResponse->assertOk()
+    $this->withToken($token)
+        ->getJson('/api/user')
+        ->assertOk()
         ->assertJsonPath('data.email', 'jane@example.com');
+
+    $this->withToken($token)
+        ->postJson('/api/auth/logout')
+        ->assertNoContent();
+
+    // Forget guards so the next request resolves only via the bearer token.
+    // In production, with statefulApi() removed, the web guard has no user.
+    auth()->forgetGuards();
+
+    $this->withToken($token)
+        ->getJson('/api/user')
+        ->assertUnauthorized();
 });
 
 it('issues bearer token usable against /api/user', function (): void {
     $user = User::factory()->create();
-    $plain = $user->createToken('cli')->plainTextToken;
+    $plain = bearerFor($user);
 
     $this->withToken($plain)
         ->getJson('/api/user')

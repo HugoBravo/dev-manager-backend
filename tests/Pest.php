@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -47,4 +48,13 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Issue a Sanctum personal access token for $user with $deviceName.
+ * Returns the plaintext "id|secret" token for use in `withToken()`.
+ */
+function bearerFor(User $user, string $deviceName = 'phpunit'): string
+{
+    return $user->createToken($deviceName)->plainTextToken;
 }

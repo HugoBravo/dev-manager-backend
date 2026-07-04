@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\RateLimiter;
+use Laravel\Sanctum\PersonalAccessToken;
 
 uses(RefreshDatabase::class);
 
-it('logs in a valid user, starts a session, and returns the user payload', function (): void {
+it('does not register statefulApi() — no Set-Cookie on login from allowed origin', function (): void {
     User::factory()->create([
         'email' => 'jane@example.com',
         'password' => bcrypt('password'),
@@ -20,49 +22,123 @@ it('logs in a valid user, starts a session, and returns the user payload', funct
             'device_name' => 'spa',
         ]);
 
-    $response->assertOk()
-        ->assertJsonStructure(['data' => ['id', 'name', 'email']]);
+    $response->assertOk();
 
-    $cookies = $response->headers->getCookies();
-    $hasSessionCookie = false;
-    foreach ($cookies as $cookie) {
-        if (in_array($cookie->getName(), ['laravel_session', 'XSRF-TOKEN'], true)) {
-            $hasSessionCookie = true;
-            break;
-        }
-    }
-    expect($hasSessionCookie)->toBeTrue();
+    $hasSessionCookie = collect($response->headers->getCookies())
+        ->contains(fn ($cookie) => in_array($cookie->getName(), ['laravel_session', 'XSRF-TOKEN'], true));
+
+    expect($hasSessionCookie)->toBeFalse();
 });
 
-it('rejects login with invalid credentials', function (): void {
+it('issues a bearer token on valid login and returns flat envelope', function (): void {
     User::factory()->create([
         'email' => 'jane@example.com',
         'password' => bcrypt('password'),
     ]);
 
-    $response = $this->withHeaders(['Origin' => 'http://localhost:4200'])
-        ->postJson('/api/auth/login', [
-            'email' => 'jane@example.com',
-            'password' => 'wrong-password',
+    $response = $this->postJson('/api/auth/login', [
+        'email' => 'jane@example.com',
+        'password' => 'password',
+        'device_name' => 'angular-dev',
+    ]);
+
+    $response->assertOk()
+        ->assertJsonStructure([
+            'user' => ['data' => ['id', 'name', 'email', 'email_verified_at']],
+            'token',
         ]);
 
-    $response->assertStatus(422);
+    expect($response->json('token'))
+        ->toBeString()
+        ->toMatch('/^\d+\|[A-Za-z0-9]+$/');
+
+    expect($response->headers->getCookies())
+        ->not->toContain(fn ($cookie) => $cookie->getName() === 'laravel_session');
 });
 
-it('logs out an authenticated session user and clears the session cookie', function (): void {
-    $user = User::factory()->create([
+it('rejects login with invalid credentials and returns errors.email', function (): void {
+    User::factory()->create([
+        'email' => 'jane@example.com',
         'password' => bcrypt('password'),
     ]);
 
-    $this->actingAs($user, 'web');
+    $response = $this->postJson('/api/auth/login', [
+        'email' => 'jane@example.com',
+        'password' => 'wrong-password',
+    ]);
 
-    $response = $this->withHeaders(['Origin' => 'http://localhost:4200'])
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['email']);
+});
+
+it('returns 401 when accessing /api/user without bearer', function (): void {
+    $this->getJson('/api/user')->assertUnauthorized();
+});
+
+it('returns 401 when accessing /api/user with malformed bearer', function (): void {
+    $this->withToken('abc-not-a-real-token')
+        ->getJson('/api/user')
+        ->assertUnauthorized();
+});
+
+it('returns 200 with user envelope on /api/user with valid bearer', function (): void {
+    $user = User::factory()->create();
+
+    $this->withToken(bearerFor($user))
+        ->getJson('/api/user')
+        ->assertOk()
+        ->assertJsonPath('data.id', $user->id)
+        ->assertJsonPath('data.email', $user->email);
+});
+
+it('logs out via bearer token and returns 204', function (): void {
+    $user = User::factory()->create();
+    $token = bearerFor($user);
+
+    $response = $this->withToken($token)
         ->postJson('/api/auth/logout');
 
     $response->assertNoContent();
-    expect(auth()->guard('web')->user())->toBeNull();
+    expect($user->fresh()->tokens)->toHaveCount(0);
 });
 
-it('returns 401 when accessing /api/user while unauthenticated', function (): void {
-    $this->getJson('/api/user')->assertUnauthorized();
+it('returns 401 on subsequent /api/user with revoked token', function (): void {
+    $user = User::factory()->create();
+    $token = bearerFor($user);
+    [$id] = explode('|', $token, 2);
+
+    $this->withToken($token)->postJson('/api/auth/logout')->assertNoContent();
+
+    // Sanctum's first-checks-web-guard behavior persists the user across
+    // requests within a single test method (RefreshDatabase keeps the test
+    // client alive). In production, with statefulApi() removed, the web
+    // guard has no session user. Here we forget guards to simulate that.
+    auth()->forgetGuards();
+
+    expect(PersonalAccessToken::findToken($token))->toBeNull();
+
+    $this->withToken($token)
+        ->getJson('/api/user')
+        ->assertUnauthorized();
+});
+
+it('returns 401 when calling /api/auth/logout without bearer', function (): void {
+    $this->postJson('/api/auth/logout')->assertUnauthorized();
+});
+
+it('enforces throttle on /api/auth/login', function (): void {
+    RateLimiter::clear('login:127.0.0.1');
+    RateLimiter::clear('login:::1');
+
+    $payload = [
+        'email' => 'nobody@example.com',
+        'password' => 'wrong-password',
+    ];
+
+    for ($i = 0; $i < 10; $i++) {
+        $this->postJson('/api/auth/login', $payload);
+    }
+
+    $blocked = $this->postJson('/api/auth/login', $payload);
+    expect($blocked->getStatusCode())->toBe(429);
 });

@@ -13,14 +13,14 @@
 |
 */
 
-$statefulDomains = array_values(array_filter(array_map(
+$allowedDomains = array_values(array_filter(array_map(
     'trim',
-    explode(',', (string) env('SANCTUM_STATEFUL_DOMAINS', 'localhost,localhost:4200'))
+    explode(',', (string) (env('SANCTUM_ALLOWED_ORIGINS') ?? env('SANCTUM_STATEFUL_DOMAINS', 'localhost,localhost:4200')))
 )));
 
-$statefulOrigins = array_map(static function (string $host): string {
+$allowedOrigins = array_map(static function (string $host): string {
     return str_starts_with($host, 'http') ? $host : 'http://'.$host;
-}, $statefulDomains);
+}, $allowedDomains);
 
 return [
 
@@ -28,7 +28,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => $statefulOrigins,
+    'allowed_origins' => $allowedOrigins,
 
     'allowed_origins_patterns' => [],
 
@@ -38,6 +38,6 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => true,
+    'supports_credentials' => false,
 
 ];

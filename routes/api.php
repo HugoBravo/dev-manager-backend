@@ -6,6 +6,9 @@ use App\Http\Controllers\Auth\TokenController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+// Bearer-mode contract: session cookies are NOT issued or consumed on /api/*.
+// All authenticated routes resolve the user via auth:sanctum + Authorization: Bearer header.
+
 Route::get('/user', function (Request $request) {
     $user = $request->user('sanctum') ?? $request->user();
 
@@ -34,10 +37,8 @@ Route::post('/auth/logout', [SessionController::class, 'destroy'])
     ->middleware('auth:sanctum')
     ->name('auth.logout');
 
-Route::post('/auth/token', [TokenController::class, 'store'])
-    ->middleware('throttle:10,1')
-    ->name('auth.token.store');
-
+// REMOVED in this migration: POST /auth/token (K1 — redundant with /auth/login).
+// Kept: DELETE /auth/token/{tokenId} for multi-device PAT revocation.
 Route::delete('/auth/token/{tokenId}', [TokenController::class, 'destroy'])
     ->middleware('auth:sanctum')
     ->name('auth.token.destroy');

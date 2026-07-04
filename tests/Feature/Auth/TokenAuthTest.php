@@ -7,39 +7,40 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-it('issues a personal access token for valid credentials', function (): void {
+it('issues bearer token for valid credentials via /api/auth/login', function (): void {
     User::factory()->create([
         'email' => 'jane@example.com',
         'password' => bcrypt('password'),
     ]);
 
-    $response = $this->postJson('/api/auth/token', [
+    $response = $this->postJson('/api/auth/login', [
         'email' => 'jane@example.com',
         'password' => 'password',
         'device_name' => 'cli',
     ]);
 
     $response->assertOk()
-        ->assertJsonStructure(['token', 'abilities']);
+        ->assertJsonStructure(['user' => ['data'], 'token']);
 
-    expect($response->json('token'))->toBeString()->not->toBeEmpty();
+    expect($response->json('token'))
+        ->toBeString()
+        ->toMatch('/^\d+\|[A-Za-z0-9]+$/');
 });
 
-it('rejects token issuance with invalid credentials', function (): void {
+it('rejects /api/auth/login with invalid credentials', function (): void {
     User::factory()->create([
         'email' => 'jane@example.com',
         'password' => bcrypt('password'),
     ]);
 
-    $response = $this->postJson('/api/auth/token', [
+    $this->postJson('/api/auth/login', [
         'email' => 'jane@example.com',
         'password' => 'wrong',
-    ]);
-
-    $response->assertStatus(422);
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['email']);
 });
 
-it('revokes an existing token when authenticated', function (): void {
+it('revokes an existing token when authenticated via DELETE /api/auth/token/{tokenId}', function (): void {
     $user = User::factory()->create();
     $plain = $user->createToken('cli')->plainTextToken;
 
@@ -56,4 +57,17 @@ it('revokes an existing token when authenticated', function (): void {
 it('rejects token revocation when unauthenticated', function (): void {
     $response = $this->deleteJson('/api/auth/token/1');
     $response->assertUnauthorized();
+});
+
+it('returns 404 for the removed POST /api/auth/token route (K1)', function (): void {
+    User::factory()->create([
+        'email' => 'jane@example.com',
+        'password' => bcrypt('password'),
+    ]);
+
+    $this->postJson('/api/auth/token', [
+        'email' => 'jane@example.com',
+        'password' => 'password',
+        'device_name' => 'cli',
+    ])->assertNotFound();
 });
