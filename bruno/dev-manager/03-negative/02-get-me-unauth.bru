@@ -1,5 +1,5 @@
 meta {
-  name: 02 - get me unauthenticated
+  name: 02 - get me unauthenticated (401)
   type: http
   seq: 2
 }
@@ -12,20 +12,10 @@ get {
 
 headers {
   Accept: application/json
-  Origin: {{spaOrigin}}
 }
 
 docs {
-  # Negative: /api/user without any credential should 401.
-
-  If you ran the SPA flow up to 04-logout, cookies are now invalid.
-  If you ran only the bearer flow up to 03-revoke-token, no bearer is
-  in scope. Either way the request must hit the auth:sanctum middleware
-  and bounce with 401.
-
-  To force a clean state in Bruno: open a new request tab, run this,
-  confirm 401. Do NOT click "Run All" after the logout/revoke request
-  to keep the failure deterministic.
+  # Negative: GET /api/user without bearer returns 401.
 
   Expected: 401 Unauthorized.
 }

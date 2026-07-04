@@ -1,5 +1,5 @@
 meta {
-  name: 03 - cors preflight allowed origin
+  name: 03 - CORS preflight allowed origin
   type: http
   seq: 3
 }
@@ -12,17 +12,22 @@ options {
 
 headers {
   Accept: application/json
-  Origin: {{spaOrigin}}
+  Origin: http://localhost:4200
   Access-Control-Request-Method: GET
-  Access-Control-Request-Headers: X-XSRF-TOKEN
+  Access-Control-Request-Headers: Authorization
 }
 
 docs {
-  # CORS: preflight from an allowed stateful origin must echo it back.
+  # CORS preflight from an allowed origin.
 
   The expected response headers:
-  - `Access-Control-Allow-Origin: http://localhost:4200` (echo of Origin)
-  - `Access-Control-Allow-Credentials: true`
+  - `Access-Control-Allow-Origin: http://localhost:4200` (echo of Origin).
+  - `Access-Control-Allow-Headers: Authorization` (since the API requires Bearer).
+  - `Access-Control-Allow-Credentials` MUST NOT be set (bearer mode).
 
-  Expected: 200/204 with the two CORS headers above.
+  If `Access-Control-Allow-Origin` echoes `http://localhost:4200` and
+  `Authorization` is in `Access-Control-Allow-Headers`, the API is ready
+  to serve the SPA.
+
+  Expected: 200/204 with the CORS headers above.
 }

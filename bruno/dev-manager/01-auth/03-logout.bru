@@ -1,0 +1,33 @@
+meta {
+  name: 03 - logout (revokes current bearer)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/auth/logout
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearerToken}}
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  # Logout revokes the current bearer token.
+
+  Backend behavior (`auth-bearer-mode-2026`):
+  - `auth:sanctum` middleware resolves the user via the Bearer header.
+  - `SessionController::destroy` calls
+    `$request->user()->currentAccessToken()->delete()`.
+  - Subsequent requests with the same token return 401.
+
+  Prereq: run `01-login` first.
+
+  Expected: 204 No Content.
+}

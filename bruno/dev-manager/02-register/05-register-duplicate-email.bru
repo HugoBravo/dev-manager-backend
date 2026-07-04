@@ -1,7 +1,7 @@
 meta {
-  name: 06 - register duplicate email (422)
+  name: 05 - register duplicate email (422)
   type: http
-  seq: 6
+  seq: 5
 }
 
 post {
@@ -13,8 +13,6 @@ post {
 headers {
   Accept: application/json
   Content-Type: application/json
-  Origin: {{spaOrigin}}
-  X-XSRF-TOKEN: {{xsrfRaw}}
 }
 
 body:json {
@@ -32,8 +30,7 @@ docs {
   Rule: `unique:users,email` short-circuits the request before INSERT,
   so the response is 422 — NOT a 500 from the DB unique index.
 
-  This deliberately reuses the `email` env var (the seeded user) so
-  the duplicate path is reproducible without manual setup.
+  This reuses the `email` env var (the seeded user) for reproducibility.
 
   Expected: 422 with `errors.email`.
 }

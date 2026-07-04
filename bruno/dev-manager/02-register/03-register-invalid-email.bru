@@ -1,7 +1,7 @@
 meta {
-  name: 04 - register invalid email (422)
+  name: 03 - register invalid email (422)
   type: http
-  seq: 4
+  seq: 3
 }
 
 post {
@@ -13,8 +13,6 @@ post {
 headers {
   Accept: application/json
   Content-Type: application/json
-  Origin: {{spaOrigin}}
-  X-XSRF-TOKEN: {{xsrfRaw}}
 }
 
 body:json {
@@ -29,7 +27,8 @@ body:json {
 docs {
   # Negative: invalid email format triggers the `email` rule.
 
-  Rule: `RegisterRequest::rules()['email']` is `required|email|max:180|unique:users,email`.
+  Rule: `RegisterRequest::rules()['email']` is
+  `required|email|max:180|unique:users,email`.
 
   Expected: 422 with `errors.email`.
 }

@@ -1,7 +1,7 @@
 meta {
-  name: 03 - register missing name (422)
+  name: 02 - register missing name (422)
   type: http
-  seq: 3
+  seq: 2
 }
 
 post {
@@ -13,8 +13,6 @@ post {
 headers {
   Accept: application/json
   Content-Type: application/json
-  Origin: {{spaOrigin}}
-  X-XSRF-TOKEN: {{xsrfRaw}}
 }
 
 body:json {

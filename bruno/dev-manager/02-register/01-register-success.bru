@@ -1,0 +1,56 @@
+meta {
+  name: 01 - register success (issues bearer token)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/auth/register
+  body: json
+  auth: none
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "{{registerName}}",
+    "email": "{{registerEmail}}",
+    "password": "{{registerPassword}}",
+    "password_confirmation": "{{registerPassword}}",
+    "device_name": "bruno-spa"
+  }
+}
+
+docs {
+  # Happy-path self-registration in bearer mode.
+
+  Backend behavior (`auth-bearer-mode-2026`):
+  - Creates the user with `email_verified_at = now()` (no email verification flow).
+  - Hashes the password via the model cast.
+  - Issues a personal access token via `$user->createToken($deviceName)`.
+  - Returns 201 with body `{ user: UserResource-envelope, token: "id|secret" }`.
+
+  This request captures the token into `registerBearerToken` so
+  subsequent requests in this folder can authenticate via Bearer.
+
+  Expected: 201, `user.data.email_verified_at` present, `token` matching
+  `/^\d+\|[A-Za-z0-9]+$/`.
+
+  Pitfall: if `registerEmail` already exists, this returns 422 with
+  `errors.email`. Change the env var or seed a fresh user.
+}
+
+script:post-response {
+  try {
+    const body = res.getBody();
+    if (body && body.token) {
+      bru.setEnvVar("registerBearerToken", String(body.token));
+    }
+  } catch (e) {
+    // ignore
+  }
+}
