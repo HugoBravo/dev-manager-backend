@@ -19,15 +19,21 @@ final class ProjectController extends Controller
 {
     /**
      * List the authenticated user's projects (paginated envelope page[size]=25).
+     * Hidden by default: archived (where archived_at IS NOT NULL).
+     * Pass `?include_archived=1` to bypass — same convention as Card's
+     * `?archived=1` filter from the spec.
      */
     public function index(Request $request): JsonResponse
     {
-        $projects = Project::query()
+        $query = Project::query()
             ->where('owner_id', $request->user()->id)
-            ->orderBy('id')
-            ->paginate(25);
+            ->orderBy('id');
 
-        return ProjectResource::collection($projects)->response();
+        if (! $request->boolean('include_archived')) {
+            $query->whereNull('archived_at');
+        }
+
+        return ProjectResource::collection($query->paginate(25))->response();
     }
 
     /**
@@ -39,6 +45,9 @@ final class ProjectController extends Controller
             'owner_id' => $request->user()->id,
             'name' => $request->validated('name'),
             'description' => $request->validated('description'),
+            // `slug` is optional in the request — the Project model
+            // auto-generates a unique slug from `name` when omitted.
+            'slug' => $request->validated('slug'),
         ]);
 
         return (new ProjectResource($project))->response()->setStatusCode(201);
@@ -46,10 +55,16 @@ final class ProjectController extends Controller
 
     /**
      * Show one project. Cross-owner resolves to 404 (no existence leak).
+     * Archived projects respond 404 by default; pass
+     * `?include_archived=1` to view them.
      */
     public function show(Request $request, int $project): JsonResponse
     {
         $model = $this->resolveOwnedProject($request, $project);
+
+        if ($model->archived_at !== null && ! $request->boolean('include_archived')) {
+            throw (new ModelNotFoundException)->setModel(Project::class, [$project]);
+        }
 
         return (new ProjectResource($model))->response();
     }

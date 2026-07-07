@@ -23,6 +23,8 @@ final class ProjectResource extends JsonResource
                 'id' => $this->resource->id,
                 'name' => $this->resource->name,
                 'description' => $this->resource->description,
+                'slug' => $this->resource->slug,
+                'archived_at' => optional($this->resource->archived_at)?->toIso8601String(),
                 'owner_id' => $this->resource->owner_id,
                 'created_at' => optional($this->resource->created_at)?->toIso8601String(),
                 'updated_at' => optional($this->resource->updated_at)?->toIso8601String(),

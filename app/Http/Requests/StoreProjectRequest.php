@@ -23,6 +23,9 @@ final class StoreProjectRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'min:1', 'max:100'],
             'description' => ['nullable', 'string'],
+            // Optional. If omitted, the Project model auto-generates from `name`.
+            // If provided, must be URL-safe (a-z, 0-9, hyphens) and unique.
+            'slug' => ['sometimes', 'string', 'max:100', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', 'unique:projects,slug'],
         ];
     }
 }
