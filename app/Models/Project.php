@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['owner_id', 'name', 'description'])]
 class Project extends Model
@@ -22,5 +23,15 @@ class Project extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    /**
+     * Boards under this project. Forward-compatible with Batch 2 (boards
+     * migration adds `project_id` FK cascadeOnDelete, see
+     * 2026_07_07_010000_create_boards_table).
+     */
+    public function boards(): HasMany
+    {
+        return $this->hasMany(Board::class);
     }
 }
