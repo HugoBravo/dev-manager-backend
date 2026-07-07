@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use App\Models\Board;
-use App\Models\Card;
-use App\Models\CardAttachment;
-use App\Models\CardComment;
+use App\Models\KanbanAttachment;
+use App\Models\KanbanBoard;
+use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
+use App\Models\KanbanComment;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
@@ -46,7 +46,7 @@ beforeEach(function (): void {
 it('lets the owner reach their own board index', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    Board::factory()->forProject($project)->count(2)->create();
+    KanbanBoard::factory()->forProject($project)->count(2)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/projects/{$project->id}/kanban/boards")
@@ -65,7 +65,7 @@ it('returns 404 (not 403) when an attacker fetches another user project board', 
     $owner = User::factory()->create();
     $attacker = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     // Explicit assertion comment — this MUST be 404, NOT 403, by design.
     $this->actingAs($attacker, 'sanctum')
@@ -81,7 +81,7 @@ it('returns 404 (not 403) when an attacker fetches another user project board', 
 it('returns empty board list when the project is archived and the flag is omitted', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create(['archived_at' => now()]);
-    Board::factory()->forProject($project)->count(3)->create();
+    KanbanBoard::factory()->forProject($project)->count(3)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/projects/{$project->id}/kanban/boards")
@@ -92,7 +92,7 @@ it('returns empty board list when the project is archived and the flag is omitte
 it('returns boards when the project is archived and ?include_archived=1 is set', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create(['archived_at' => now()]);
-    Board::factory()->forProject($project)->count(3)->create();
+    KanbanBoard::factory()->forProject($project)->count(3)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/projects/{$project->id}/kanban/boards?include_archived=1")
@@ -111,9 +111,9 @@ it('returns boards when the project is archived and ?include_archived=1 is set',
 it('returns 404 on a card show when the project is archived and the flag is omitted', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create(['archived_at' => now()]);
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
@@ -123,9 +123,9 @@ it('returns 404 on a card show when the project is archived and the flag is omit
 it('returns 200 on a card show when the project is archived and ?include_archived=1 is set', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create(['archived_at' => now()]);
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}?include_archived=1")
@@ -146,11 +146,11 @@ it('returns 404 to an attacker on every nested resource type', function (string 
 
     // Build the full chain — every nested resource needs its parents.
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
-    $comment = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
-    $attachment = CardAttachment::factory()->forCard($card)->byUploader($owner)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
+    $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
+    $attachment = KanbanAttachment::factory()->forCard($card)->byUploader($owner)->create();
 
     $method = 'GET';
     $path = match ($resourceType) {
@@ -184,7 +184,7 @@ it('returns 404 to an attacker on every nested resource type', function (string 
     // proves the binding returned 404 (not 403 which would not mutate state
     // either, but explicitly asserts idempotence and non-mutation contract).
     if ($resourceType === 'attachment') {
-        expect(CardAttachment::query()->whereKey($attachment->id)->exists())->toBeTrue();
+        expect(KanbanAttachment::query()->whereKey($attachment->id)->exists())->toBeTrue();
     }
 })->with([
     'project' => ['project'],

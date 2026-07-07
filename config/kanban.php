@@ -8,9 +8,9 @@ declare(strict_types=1);
 |--------------------------------------------------------------------------
 |
 | Runtime tunables for the kanban capability. Centralized here so that
-| the value object layer (`App\Support\Kanban\Position`) AND the
-| authorization layer (`CommentPolicy` + `UpdateCommentRequest` window
-| check) read from a single source of truth.
+    | the value object layer (`App\ValueObjects\Kanban\Position`) AND the
+    | authorization layer (`KanbanCommentPolicy` + `Kanban\UpdateCommentRequest` window
+    | check) read from a single source of truth.
 |
 */
 
@@ -33,7 +33,7 @@ return [
     | KANBAN_INCLUDE_ARCHIVED_DEFAULT env var.
     |
     | This flag is a single source of truth for the helper at
-    | App\Http\Controllers\Api\V1\Concerns\KanbanRequestScope::
+    | App\Http\Controllers\Api\V1\Kanban\Concerns\KanbanRequestScope::
     | includeArchived(). Controllers MUST call that helper, never
     | `request()->boolean('include_archived')`, so the contract stays
     | consistent across the chain.

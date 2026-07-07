@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use App\Models\Board;
-use App\Models\Card;
-use App\Models\CardAttachment;
-use App\Models\CardComment;
+use App\Models\KanbanAttachment;
+use App\Models\KanbanBoard;
+use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
+use App\Models\KanbanComment;
 use App\Models\Project;
 use App\Models\User;
 use Database\Seeders\DemoProjectSeeder;
@@ -44,9 +44,9 @@ beforeEach(function (): void {
 it('runs the full project → board → column → card → comment → attachment → cascade chain', function (): void {
     $demo = User::query()->where('email', 'demo@dev-manager.test')->firstOrFail();
     $project = Project::query()->where('name', 'Demo Kanban Project')->firstOrFail();
-    $board = Board::query()->where('project_id', $project->id)->firstOrFail();
+    $board = KanbanBoard::query()->where('project_id', $project->id)->firstOrFail();
     $columns = KanbanColumn::query()->where('board_id', $board->id)->orderBy('position')->get();
-    $cards = Card::query()->whereIn('column_id', $columns->pluck('id'))->orderBy('position')->get();
+    $cards = KanbanCard::query()->whereIn('column_id', $columns->pluck('id'))->orderBy('position')->get();
 
     // Sanity baseline — the seeded chain is intact.
     expect($columns)->toHaveCount(3)
@@ -110,7 +110,7 @@ it('runs the full project → board → column → card → comment → attachme
 
     // The on-disk path is whatever Storage::disk('local')->putFileAs returned.
     // Look it up via the row (id is unique).
-    $newAttachmentPath = CardAttachment::query()->whereKey($newAttachmentId)->value('path');
+    $newAttachmentPath = KanbanAttachment::query()->whereKey($newAttachmentId)->value('path');
     expect($newAttachmentPath)->toBeString();
 
     // File is on disk.
@@ -124,19 +124,19 @@ it('runs the full project → board → column → card → comment → attachme
 
     // ─── Cascade ──────────────────────────────────────────────────────
     // Hard-delete the card; FK CASCADE removes comments + attachments
-    // rows, the CascadesCardFiles trait removes the attachment file.
+    // rows, the CascadesKanbanCardFiles trait removes the attachment file.
     $this->actingAs($demo, 'sanctum')
         ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}")
         ->assertNoContent();
 
     // Card row gone.
-    expect(Card::query()->whereKey($firstCard->id)->exists())->toBeFalse();
+    expect(KanbanCard::query()->whereKey($firstCard->id)->exists())->toBeFalse();
 
     // Newly-created comment row gone (FK cascade).
-    expect(CardComment::query()->whereKey($newCommentId)->exists())->toBeFalse();
+    expect(KanbanComment::query()->whereKey($newCommentId)->exists())->toBeFalse();
 
     // Newly-created attachment row gone.
-    expect(CardAttachment::query()->whereKey($newAttachmentId)->exists())->toBeFalse();
+    expect(KanbanAttachment::query()->whereKey($newAttachmentId)->exists())->toBeFalse();
 
     // Attachment file removed from disk.
     Storage::disk('local')->assertMissing($newAttachmentPath);

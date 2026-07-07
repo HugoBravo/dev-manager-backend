@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use App\Models\Board;
-use App\Models\Card;
+use App\Models\KanbanBoard;
+use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
 use App\Models\Project;
 use App\Models\User;
@@ -25,15 +25,15 @@ use App\Models\User;
 it('moves a card cross-column and preserves stable ascending position order in the destination', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $sourceColumn = KanbanColumn::factory()->forBoard($board)->create();
     $targetColumn = KanbanColumn::factory()->forBoard($board)->create();
 
     // Seed source with 2 cards (a0, a1) and target with 2 cards (a0, a1)
-    $sourceA = Card::factory()->forColumn($sourceColumn)->create();
-    Card::factory()->forColumn($sourceColumn)->create();
-    Card::factory()->forColumn($targetColumn)->create();
-    Card::factory()->forColumn($targetColumn)->create();
+    $sourceA = KanbanCard::factory()->forColumn($sourceColumn)->create();
+    KanbanCard::factory()->forColumn($sourceColumn)->create();
+    KanbanCard::factory()->forColumn($targetColumn)->create();
+    KanbanCard::factory()->forColumn($targetColumn)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$sourceColumn->id}/cards/{$sourceA->id}/move", [
@@ -71,13 +71,13 @@ it('returns 404 when moving a card to a column in a different project of the SAM
     $projectA = Project::factory()->forOwner($owner)->create();
     $projectB = Project::factory()->forOwner($owner)->create();
 
-    $boardA = Board::factory()->forProject($projectA)->create();
-    $boardB = Board::factory()->forProject($projectB)->create();
+    $boardA = KanbanBoard::factory()->forProject($projectA)->create();
+    $boardB = KanbanBoard::factory()->forProject($projectB)->create();
 
     $sourceColumn = KanbanColumn::factory()->forBoard($boardA)->create();
     $foreignColumn = KanbanColumn::factory()->forBoard($boardB)->create();
 
-    $card = Card::factory()->forColumn($sourceColumn)->create();
+    $card = KanbanCard::factory()->forColumn($sourceColumn)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$projectA->id}/kanban/boards/{$boardA->id}/columns/{$sourceColumn->id}/cards/{$card->id}/move", [
@@ -92,10 +92,10 @@ it('returns 404 when a stranger moves a card', function (): void {
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $sourceColumn = KanbanColumn::factory()->forBoard($board)->create();
     $targetColumn = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($sourceColumn)->create();
+    $card = KanbanCard::factory()->forColumn($sourceColumn)->create();
 
     $this->actingAs($stranger, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$sourceColumn->id}/cards/{$card->id}/move", [
@@ -109,12 +109,12 @@ it('returns 404 when a stranger moves a card', function (): void {
 it('reorders cards within a column and persists the new order', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
-    $a = Card::factory()->forColumn($column)->create();
-    $b = Card::factory()->forColumn($column)->create();
-    $c = Card::factory()->forColumn($column)->create();
+    $a = KanbanCard::factory()->forColumn($column)->create();
+    $b = KanbanCard::factory()->forColumn($column)->create();
+    $c = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/reorder", [
@@ -137,11 +137,11 @@ it('reorders cards within a column and persists the new order', function (): voi
 it('rejects reorder with duplicate ids', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
-    $a = Card::factory()->forColumn($column)->create();
-    Card::factory()->forColumn($column)->create();
+    $a = KanbanCard::factory()->forColumn($column)->create();
+    KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/reorder", [
@@ -155,10 +155,10 @@ it('returns 404 when a stranger reorders cards', function (): void {
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $a = Card::factory()->forColumn($column)->create();
-    $b = Card::factory()->forColumn($column)->create();
+    $a = KanbanCard::factory()->forColumn($column)->create();
+    $b = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($stranger, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/reorder", [
