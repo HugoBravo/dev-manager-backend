@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\BoardController;
+use App\Http\Controllers\Api\V1\ColumnController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use Illuminate\Support\Facades\Route;
 
@@ -18,8 +19,8 @@ use Illuminate\Support\Facades\Route;
 | The kanban capability is owned by `ProjectPolicy` — cross-owner requests
 | resolve to 404 via the controller's owner-scoped fetch on the project root
 | (ProjectController::resolveOwnedProject) AND via the `Route::bind('board',
-| ...)` scoping closure registered in AppServiceProvider::boot(). See
-| sdd/kanban/design §4 and §7.
+| ...)` AND `Route::bind('column', ...)` scoping closures registered in
+| AppServiceProvider::boot(). See sdd/kanban/design §4 and §7.
 |
 */
 
@@ -46,5 +47,23 @@ Route::middleware(['auth:sanctum', 'throttle:api'])
 
             Route::post('boards/{board}/archive', [BoardController::class, 'archive'])
                 ->name('api.v1.projects.kanban.boards.archive');
+
+            // Column lifecycle. The reorder + {column}/move routes are listed
+            // BEFORE the {column} wildcard so /reorder and /move do not get
+            // captured by it. apiResource covers the 5 standard REST verbs.
+            Route::post('boards/{board}/columns/reorder', [ColumnController::class, 'reorder'])
+                ->name('api.v1.projects.kanban.boards.columns.reorder');
+
+            Route::apiResource('boards/{board}/columns', ColumnController::class)
+                ->names([
+                    'index' => 'api.v1.projects.kanban.boards.columns.index',
+                    'store' => 'api.v1.projects.kanban.boards.columns.store',
+                    'show' => 'api.v1.projects.kanban.boards.columns.show',
+                    'update' => 'api.v1.projects.kanban.boards.columns.update',
+                    'destroy' => 'api.v1.projects.kanban.boards.columns.destroy',
+                ]);
+
+            Route::post('boards/{board}/columns/{column}/move', [ColumnController::class, 'move'])
+                ->name('api.v1.projects.kanban.boards.columns.move');
         });
     });
