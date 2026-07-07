@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Models\Board;
+use App\Models\Card;
 use App\Models\KanbanColumn;
 use App\Models\Project;
 use App\Policies\BoardPolicy;
+use App\Policies\CardPolicy;
 use App\Policies\ColumnPolicy;
 use App\Policies\ProjectPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -47,6 +49,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Project::class, ProjectPolicy::class);
         Gate::policy(Board::class, BoardPolicy::class);
         Gate::policy(KanbanColumn::class, ColumnPolicy::class);
+        Gate::policy(Card::class, CardPolicy::class);
 
         // Ownership-scoped route binding for `{board}`. Resolves to 404
         // (ModelNotFoundException) when the board does not belong to a project
@@ -104,6 +107,33 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return $column;
+        });
+
+        // Ownership-scoped route binding for `{card}` (Batch 4). The closure
+        // walks column -> board -> project -> owner — one level deeper than
+        // {column} because every card is reached via
+        // /projects/{project}/boards/{board}/columns/{column}/cards/{card}.
+        // A card whose column belongs to a stranger's project chain resolves
+        // to 404 here; the controller's `ensureCardBelongsToColumn` provides
+        // a second check (URL consistency, not ownership).
+        Route::bind('card', function (string $value): Card {
+            $userId = request()->user()?->id;
+            if ($userId === null) {
+                throw (new ModelNotFoundException)->setModel(Card::class, [$value]);
+            }
+
+            $card = Card::query()
+                ->whereHas('column.board.project', function ($q) use ($userId): void {
+                    $q->where('owner_id', $userId);
+                })
+                ->whereKey($value)
+                ->first();
+
+            if ($card === null) {
+                throw (new ModelNotFoundException)->setModel(Card::class, [$value]);
+            }
+
+            return $card;
         });
     }
 }
