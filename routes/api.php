@@ -41,3 +41,7 @@ Route::post('/auth/logout', [SessionController::class, 'destroy'])
 Route::delete('/auth/tokens/{tokenId}', [SessionController::class, 'revokeToken'])
     ->middleware('auth:sanctum')
     ->name('auth.tokens.destroy');
+
+// Kanban capability v1 — owned projects / boards / columns / cards / comments / attachments.
+// Mounted under /api/v1; auth:sanctum + throttle:api enforced inside routes/api/v1.php.
+require __DIR__.'/api/v1.php';
