@@ -9,17 +9,16 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A column belongs to a board and holds cards (Batch 4). Position is the
  * base-26 lexicographic fractional string managed by the `Position` value
  * object (`App\Support\Kanban\Position`).
  *
- * Cards relationship is NOT declared here yet — Batch 4 will add it. The
- * 409 non-empty-column contract in `ColumnController::destroy` uses a
- * memoised table-existence check (`cardsTableExists()`) until Batch 4
- * ships the relationship — same pattern Batch 2 used for boards.
+ * `cards()` is now a real HasMany — ColumnController::destroy uses
+ * `$column->cards()->exists()` for the 409 non-empty check; the prior
+ * `cardsTableExists()` memoization has been retired.
  */
 #[Fillable(['board_id', 'name', 'position', 'archived_at'])]
 class KanbanColumn extends Model
@@ -48,19 +47,12 @@ class KanbanColumn extends Model
     }
 
     /**
-     * Whether the underlying `cards` table exists yet. Used by the column
-     * controller to gate the 409-on-non-empty-delete path until Batch 4
-     * ships the cards table. Mirrors `Board::columnsTableExists()` from
-     * Batch 2.
+     * Cards under this column.
+     *
+     * @phpstan-return HasMany<Card>
      */
-    public static function cardsTableExists(): bool
+    public function cards(): HasMany
     {
-        static $cached = null;
-
-        if ($cached === null) {
-            $cached = Schema::hasTable('cards');
-        }
-
-        return $cached;
+        return $this->hasMany(Card::class, 'column_id');
     }
 }

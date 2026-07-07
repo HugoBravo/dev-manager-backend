@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Exceptions\ColumnHasContentsException;
+use App\Http\Controllers\Api\V1\Concerns\ComputesKanbanPositions;
+use App\Http\Controllers\Api\V1\Concerns\ResolvesKanbanChain;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\MoveColumnRequest;
 use App\Http\Requests\ReorderColumnsRequest;
@@ -13,7 +15,6 @@ use App\Http\Requests\UpdateColumnRequest;
 use App\Http\Resources\ColumnResource;
 use App\Models\Board;
 use App\Models\KanbanColumn;
-use App\Models\Project;
 use App\Support\Kanban\Position;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
@@ -37,6 +38,9 @@ use Illuminate\Support\Facades\Gate;
  */
 final class ColumnController extends Controller
 {
+    use ComputesKanbanPositions;
+    use ResolvesKanbanChain;
+
     /**
      * List columns of a board (paginated 25/page; archived columns hidden).
      */
@@ -112,20 +116,17 @@ final class ColumnController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
 
-        // Card existence check — meaningful only once `cards` table exists
-        // (Batch 4). Until then the policy stub gates the 409 path; the
-        // controller's `cardsTableExists()` branch returns the typed 409
-        // against the real `cards` table.
-        if (KanbanColumn::cardsTableExists()) {
-            $count = (int) DB::table('cards')->where('column_id', $column->id)->count();
-            if ($count > 0) {
-                throw new ColumnHasContentsException($column);
-            }
+        // Card-existence check via the real `cards()` relationship (ships
+        // in Batch 4). The Batch 3 `cardsTableExists()` schema-cache memo
+        // is retired; the HasMany is now authoritative.
+        if ($column->cards()->exists()) {
+            throw new ColumnHasContentsException($column);
         }
 
         // Belt-and-braces: a denial of ColumnPolicy::delete is treated as
         // "non-empty" and surfaces the typed 409 too. Tests in Batch 3
-        // stub the policy with `delete() = false` to exercise this path.
+        // stub the policy with `delete() = false` to exercise this path;
+        // Batch 4+ runs through the real HasMany branch above.
         $inspection = Gate::inspect('delete', $column);
         if ($inspection->denied()) {
             throw new ColumnHasContentsException($column);
@@ -216,47 +217,10 @@ final class ColumnController extends Controller
     }
 
     /**
-     * Resolve the project owned by the authenticated user; 404 otherwise.
-     */
-    private function resolveOwnedProject(Request $request, int $projectId): Project
-    {
-        $model = Project::query()
-            ->where('owner_id', $request->user()->id)
-            ->whereKey($projectId)
-            ->first();
-
-        if ($model === null) {
-            throw (new ModelNotFoundException)->setModel(Project::class, [$projectId]);
-        }
-
-        return $model;
-    }
-
-    /**
-     * Throw 404 if the board does not belong to the project named in URL.
-     */
-    private function ensureBoardBelongsToProject(Board $board, Project $project): void
-    {
-        if ($board->project_id !== $project->id) {
-            throw (new ModelNotFoundException)->setModel(Board::class, [$board->id]);
-        }
-    }
-
-    /**
-     * Throw 404 if the column does not belong to the board named in URL.
-     */
-    private function ensureColumnBelongsToBoard(KanbanColumn $column, Board $board): void
-    {
-        if ($column->board_id !== $board->id) {
-            throw (new ModelNotFoundException)->setModel(KanbanColumn::class, [$column->id]);
-        }
-    }
-
-    /**
      * Compute the next position to append under a board via the
      * `Position` value object. Picks `Position::after(rightmost)` when
      * there are existing columns, else `Position::start()` (alphabet
-     * midpoint 'n').
+     * midpoint 'n'). Column-specific counterpart lives on the trait.
      */
     private function nextPositionForBoard(int $boardId): string
     {
@@ -270,22 +234,5 @@ final class ColumnController extends Controller
         }
 
         return Position::after($rightmost)->value();
-    }
-
-    /**
-     * Indexed position string for the Nth slot of a reordered batch.
-     * Drops into a stable indexed sequence so a second fetch yields
-     * identical order; explicitly does NOT use `Position::between` so
-     * reorder is O(1) per write and never triggers precision exhaustion.
-     */
-    private function indexedPosition(int $index): string
-    {
-        $prefix = 'r';
-        $letter = chr(ord('a') + ($index % 26));
-        $depth = intdiv($index, 26);
-
-        $base = $prefix.$letter;
-
-        return $depth > 0 ? $base.str_repeat('a', $depth) : $base;
     }
 }

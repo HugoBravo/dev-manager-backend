@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\BoardController;
+use App\Http\Controllers\Api\V1\CardArchiveController;
+use App\Http\Controllers\Api\V1\CardController;
+use App\Http\Controllers\Api\V1\CardMoveController;
 use App\Http\Controllers\Api\V1\ColumnController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use Illuminate\Support\Facades\Route;
@@ -65,5 +68,30 @@ Route::middleware(['auth:sanctum', 'throttle:api'])
 
             Route::post('boards/{board}/columns/{column}/move', [ColumnController::class, 'move'])
                 ->name('api.v1.projects.kanban.boards.columns.move');
+
+            // Card lifecycle. The reorder route MUST come BEFORE the {card}
+            // wildcard so /reorder does not get captured as {card}. apiResource
+            // covers the 5 standard REST verbs; archive / restore / move are
+            // explicit routes registered before the {card} wildcard.
+            Route::post('boards/{board}/columns/{column}/cards/reorder', [CardController::class, 'reorder'])
+                ->name('api.v1.projects.kanban.boards.columns.cards.reorder');
+
+            Route::apiResource('boards/{board}/columns/{column}/cards', CardController::class)
+                ->names([
+                    'index' => 'api.v1.projects.kanban.boards.columns.cards.index',
+                    'store' => 'api.v1.projects.kanban.boards.columns.cards.store',
+                    'show' => 'api.v1.projects.kanban.boards.columns.cards.show',
+                    'update' => 'api.v1.projects.kanban.boards.columns.cards.update',
+                    'destroy' => 'api.v1.projects.kanban.boards.columns.cards.destroy',
+                ]);
+
+            Route::post('boards/{board}/columns/{column}/cards/{card}/archive', [CardArchiveController::class, 'archive'])
+                ->name('api.v1.projects.kanban.boards.columns.cards.archive');
+
+            Route::post('boards/{board}/columns/{column}/cards/{card}/restore', [CardArchiveController::class, 'restore'])
+                ->name('api.v1.projects.kanban.boards.columns.cards.restore');
+
+            Route::post('boards/{board}/columns/{column}/cards/{card}/move', [CardMoveController::class, 'move'])
+                ->name('api.v1.projects.kanban.boards.columns.cards.move');
         });
     });
