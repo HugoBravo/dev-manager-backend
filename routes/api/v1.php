@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-use App\Http\Controllers\Api\V1\AttachmentController;
-use App\Http\Controllers\Api\V1\BoardController;
-use App\Http\Controllers\Api\V1\CardArchiveController;
-use App\Http\Controllers\Api\V1\CardController;
-use App\Http\Controllers\Api\V1\CardMoveController;
-use App\Http\Controllers\Api\V1\ColumnController;
-use App\Http\Controllers\Api\V1\CommentController;
+use App\Http\Controllers\Api\V1\Kanban\AttachmentController;
+use App\Http\Controllers\Api\V1\Kanban\BoardController;
+use App\Http\Controllers\Api\V1\Kanban\CardArchiveController;
+use App\Http\Controllers\Api\V1\Kanban\CardController;
+use App\Http\Controllers\Api\V1\Kanban\CardMoveController;
+use App\Http\Controllers\Api\V1\Kanban\ColumnController;
+use App\Http\Controllers\Api\V1\Kanban\CommentController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use Illuminate\Support\Facades\Route;
 

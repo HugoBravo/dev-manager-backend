@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Support\Kanban\Position;
+use App\ValueObjects\Kanban\Position;
 
 it('starts at the middle of the alphabet (n)', function (): void {
     $position = Position::start();

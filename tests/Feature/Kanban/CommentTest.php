@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use App\Models\Board;
-use App\Models\Card;
-use App\Models\CardComment;
+use App\Models\KanbanBoard;
+use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
+use App\Models\KanbanComment;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -46,10 +46,10 @@ it('returns 401 on every comment endpoint without a bearer token', function (str
 it('lists comments for a card as a paginated envelope with 25 per page', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
-    CardComment::factory()->forCard($card)->byAuthor($owner)->count(3)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
+    KanbanComment::factory()->forCard($card)->byAuthor($owner)->count(3)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments")
@@ -62,13 +62,13 @@ it('lists comments for a card as a paginated envelope with 25 per page', functio
 it('filters comments by parent_id', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
 
-    $root = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
-    CardComment::factory()->forCard($card)->byAuthor($owner)->forParent($root)->count(2)->create();
-    CardComment::factory()->forCard($card)->byAuthor($owner)->count(2)->create();
+    $root = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
+    KanbanComment::factory()->forCard($card)->byAuthor($owner)->forParent($root)->count(2)->create();
+    KanbanComment::factory()->forCard($card)->byAuthor($owner)->count(2)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments?parent_id={$root->id}")
@@ -80,9 +80,9 @@ it('filters comments by parent_id', function (): void {
 it('creates a top-level comment with 201 and default author', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
@@ -94,7 +94,7 @@ it('creates a top-level comment with 201 and default author', function (): void 
         ->and($response->json('data.parent_id'))->toBeNull()
         ->and($response->json('data.author_id'))->toBe($owner->id);
 
-    $this->assertDatabaseHas('card_comments', [
+    $this->assertDatabaseHas('kanban_comments', [
         'card_id' => $card->id,
         'author_id' => $owner->id,
         'parent_id' => null,
@@ -105,9 +105,9 @@ it('creates a top-level comment with 201 and default author', function (): void 
 it('rejects create with empty body string', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
@@ -120,9 +120,9 @@ it('rejects create with empty body string', function (): void {
 it('rejects create with body longer than 5000 chars', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
@@ -135,9 +135,9 @@ it('rejects create with body longer than 5000 chars', function (): void {
 it('accepts body with HTML tags stored verbatim (canonical text, no raw-injection of cards.body semantics)', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
 
     $body = '<b>bold</b> and <script>alert(1)</script>';
 
@@ -153,10 +153,10 @@ it('accepts body with HTML tags stored verbatim (canonical text, no raw-injectio
 it('accepts a same-author reply as a child comment on the parents own root', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
-    $root = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
+    $root = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
@@ -172,16 +172,16 @@ it('rejects a parent_id owned by a different author (cross-author thread banned 
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
 
     // Directly insert a root authored by a stranger — the form-request validation
     // runs BEFORE the route-binding authorization, so the validation rule
     // (parent.author_id === auth user.id) fires and returns 422 even though
     // a future membership model could change the access layer. This proves the
     // invariant at the validation layer rather than via the route binding.
-    $root = CardComment::query()->forceCreate([
+    $root = KanbanComment::query()->forceCreate([
         'card_id' => $card->id,
         'author_id' => $stranger->id,
         'parent_id' => null,
@@ -200,12 +200,12 @@ it('rejects a parent_id owned by a different author (cross-author thread banned 
 it('rejects a parent_id that belongs to a comment on a different card (cross-card parent)', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $cardA = Card::factory()->forColumn($column)->create();
-    $cardB = Card::factory()->forColumn($column)->create();
+    $cardA = KanbanCard::factory()->forColumn($column)->create();
+    $cardB = KanbanCard::factory()->forColumn($column)->create();
 
-    $rootOnB = CardComment::factory()->forCard($cardB)->byAuthor($owner)->create();
+    $rootOnB = KanbanComment::factory()->forCard($cardB)->byAuthor($owner)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$cardA->id}/comments", [
@@ -219,14 +219,14 @@ it('rejects a parent_id that belongs to a comment on a different card (cross-car
 it('renders thread-per-author: same-author reply uses parent_id and appears under that root', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
 
     // Three sequential comments by the SAME author produce a parent-child
     // thread shape (root -> child -> grandchild) once the owner starts
     // replying to their own root.
-    $root = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
+    $root = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     $child = $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
@@ -252,10 +252,10 @@ it('renders thread-per-author: same-author reply uses parent_id and appears unde
 it('updates a comment by its author within the edit window', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
-    $comment = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
+    $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     Carbon::setTestNow(now());
 
@@ -274,10 +274,10 @@ it('returns 404 (binding fires first) when a non-owner tries to edit a comment i
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
-    $comment = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
+    $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     // In v1 a single project has one owner. A second author's HTTP request
     // hits the binding closure FIRST and returns 404 (route ownership)
@@ -294,13 +294,13 @@ it('returns 404 (binding fires first) when a non-owner tries to edit a comment i
 it('returns 422 when a comment edit lands beyond the configured edit window', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
 
     $commentCreatedAt = now()->subMinutes((int) config('kanban.comment_edit_window_minutes') + 1);
     Carbon::setTestNow($commentCreatedAt);
-    $comment = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
+    $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
     Carbon::setTestNow($commentCreatedAt->copy()->addMinutes((int) config('kanban.comment_edit_window_minutes') + 1));
 
     $this->actingAs($owner, 'sanctum')
@@ -318,12 +318,12 @@ it('honors the configured edit window value (env override of 1 minute flips the 
 
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
 
     Carbon::setTestNow(now()->subMinutes(2));
-    $comment = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
+    $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
     Carbon::setTestNow();
 
     $this->actingAs($owner, 'sanctum')
@@ -338,10 +338,10 @@ it('honors the configured edit window value (env override of 1 minute flips the 
 it('destroys a comment by its author inside the window with 204', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
-    $comment = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
+    $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     Carbon::setTestNow(now());
 
@@ -357,13 +357,13 @@ it('destroys a comment by its author inside the window with 204', function (): v
 it('returns 422 when a comment delete lands beyond the window', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
 
     $created = now()->subMinutes((int) config('kanban.comment_edit_window_minutes') + 5);
     Carbon::setTestNow($created);
-    $comment = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
+    $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
     Carbon::setTestNow($created->copy()->addMinutes((int) config('kanban.comment_edit_window_minutes') + 5));
 
     $this->actingAs($owner, 'sanctum')
@@ -379,10 +379,10 @@ it('returns 404 when a non-owner tries to delete a comment (binding fires first)
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
-    $comment = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
+    $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     Carbon::setTestNow(now());
 
@@ -399,10 +399,10 @@ it('returns 404 when a stranger (cross-owner) tries to show a comment', function
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
-    $comment = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
+    $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     $this->actingAs($stranger, 'sanctum')
         ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}")
@@ -413,10 +413,10 @@ it('returns 404 when the binding closure fires for a comment on another users pr
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
-    $comment = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
+    $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     $this->actingAs($stranger, 'sanctum')
         ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}", [
@@ -430,11 +430,11 @@ it('returns 404 when the binding closure fires for a comment on another users pr
 it('returns 404 when fetching a comment via a card that belongs to a different card on the same column', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $cardA = Card::factory()->forColumn($column)->create();
-    $cardB = Card::factory()->forColumn($column)->create();
-    $comment = CardComment::factory()->forCard($cardA)->byAuthor($owner)->create();
+    $cardA = KanbanCard::factory()->forColumn($column)->create();
+    $cardB = KanbanCard::factory()->forColumn($column)->create();
+    $comment = KanbanComment::factory()->forCard($cardA)->byAuthor($owner)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$cardB->id}/comments/{$comment->id}")
@@ -444,10 +444,10 @@ it('returns 404 when fetching a comment via a card that belongs to a different c
 it('exposes the resource shape with id, card_id, author_id, parent_id, body, timestamps', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
-    $card = Card::factory()->forColumn($column)->create();
-    $comment = CardComment::factory()->forCard($card)->byAuthor($owner)->create();
+    $card = KanbanCard::factory()->forColumn($column)->create();
+    $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}")

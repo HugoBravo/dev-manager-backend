@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use App\Models\Board;
-use App\Models\Card;
-use App\Models\CardAttachment;
-use App\Models\CardComment;
+use App\Models\KanbanAttachment;
+use App\Models\KanbanBoard;
+use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
+use App\Models\KanbanComment;
 use App\Models\Project;
-use App\Policies\AttachmentPolicy;
-use App\Policies\BoardPolicy;
-use App\Policies\CardPolicy;
-use App\Policies\ColumnPolicy;
-use App\Policies\CommentPolicy;
+use App\Policies\KanbanAttachmentPolicy;
+use App\Policies\KanbanBoardPolicy;
+use App\Policies\KanbanCardPolicy;
+use App\Policies\KanbanColumnPolicy;
+use App\Policies\KanbanCommentPolicy;
 use App\Policies\ProjectPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -51,11 +51,11 @@ class AppServiceProvider extends ServiceProvider
         // but binding it explicitly here documents the ownership contract and
         // future-proofs against namespace shifts.
         Gate::policy(Project::class, ProjectPolicy::class);
-        Gate::policy(Board::class, BoardPolicy::class);
-        Gate::policy(KanbanColumn::class, ColumnPolicy::class);
-        Gate::policy(Card::class, CardPolicy::class);
-        Gate::policy(CardComment::class, CommentPolicy::class);
-        Gate::policy(CardAttachment::class, AttachmentPolicy::class);
+        Gate::policy(KanbanBoard::class, KanbanBoardPolicy::class);
+        Gate::policy(KanbanColumn::class, KanbanColumnPolicy::class);
+        Gate::policy(KanbanCard::class, KanbanCardPolicy::class);
+        Gate::policy(KanbanComment::class, KanbanCommentPolicy::class);
+        Gate::policy(KanbanAttachment::class, KanbanAttachmentPolicy::class);
 
         // Owner-scoped chokepoint (Batch 7 PHPDoc note):
         //
@@ -72,7 +72,7 @@ class AppServiceProvider extends ServiceProvider
         //   string — coupling two unrelated request attributes to the binding.
         //   Instead, archived_at is honored at the controller layer via the
         //   `KanbanRequestScope` trait (see App\Http\Controllers\Api\V1\
-        //   Concerns\KanbanRequestScope). The trait's `ensureNotArchivedProject`
+        //   Kanban\Concerns\KanbanRequestScope). The trait's `ensureNotArchivedProject`
         //   helper checks `config('kanban.include_archived_default')` and the
         //   request's `?include_archived=1` flag, then throws ModelNotFoundException
         //   (404) when the project is archived and the request did not opt in.
@@ -94,13 +94,13 @@ class AppServiceProvider extends ServiceProvider
         // Column needs board -> project -> owner, so the closure walks
         // through two levels of ownership. Batches 4-6 must follow this
         // exact pattern for `{card}`, `{comment}`, `{attachment}`.
-        Route::bind('board', function (string $value): Board {
+        Route::bind('board', function (string $value): KanbanBoard {
             $userId = request()->user()?->id;
             if ($userId === null) {
-                throw (new ModelNotFoundException)->setModel(Board::class, [$value]);
+                throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$value]);
             }
 
-            $board = Board::query()
+            $board = KanbanBoard::query()
                 ->whereHas('project', function ($q) use ($userId): void {
                     $q->where('owner_id', $userId);
                 })
@@ -108,7 +108,7 @@ class AppServiceProvider extends ServiceProvider
                 ->first();
 
             if ($board === null) {
-                throw (new ModelNotFoundException)->setModel(Board::class, [$value]);
+                throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$value]);
             }
 
             return $board;
@@ -147,13 +147,13 @@ class AppServiceProvider extends ServiceProvider
         // A card whose column belongs to a stranger's project chain resolves
         // to 404 here; the controller's `ensureCardBelongsToColumn` provides
         // a second check (URL consistency, not ownership).
-        Route::bind('card', function (string $value): Card {
+        Route::bind('card', function (string $value): KanbanCard {
             $userId = request()->user()?->id;
             if ($userId === null) {
-                throw (new ModelNotFoundException)->setModel(Card::class, [$value]);
+                throw (new ModelNotFoundException)->setModel(KanbanCard::class, [$value]);
             }
 
-            $card = Card::query()
+            $card = KanbanCard::query()
                 ->whereHas('column.board.project', function ($q) use ($userId): void {
                     $q->where('owner_id', $userId);
                 })
@@ -161,7 +161,7 @@ class AppServiceProvider extends ServiceProvider
                 ->first();
 
             if ($card === null) {
-                throw (new ModelNotFoundException)->setModel(Card::class, [$value]);
+                throw (new ModelNotFoundException)->setModel(KanbanCard::class, [$value]);
             }
 
             return $card;
@@ -171,13 +171,13 @@ class AppServiceProvider extends ServiceProvider
         // card -> column -> board -> project -> owner — the deepest chain
         // in the kanban URLs. Cross-owner returns 404; controller's
         // `comment.card_id !== $card->id` check covers cross-card 404s.
-        Route::bind('comment', function (string $value): CardComment {
+        Route::bind('comment', function (string $value): KanbanComment {
             $userId = request()->user()?->id;
             if ($userId === null) {
-                throw (new ModelNotFoundException)->setModel(CardComment::class, [$value]);
+                throw (new ModelNotFoundException)->setModel(KanbanComment::class, [$value]);
             }
 
-            $comment = CardComment::query()
+            $comment = KanbanComment::query()
                 ->whereHas('card.column.board.project', function ($q) use ($userId): void {
                     $q->where('owner_id', $userId);
                 })
@@ -185,7 +185,7 @@ class AppServiceProvider extends ServiceProvider
                 ->first();
 
             if ($comment === null) {
-                throw (new ModelNotFoundException)->setModel(CardComment::class, [$value]);
+                throw (new ModelNotFoundException)->setModel(KanbanComment::class, [$value]);
             }
 
             return $comment;
@@ -195,13 +195,13 @@ class AppServiceProvider extends ServiceProvider
         // Walks card -> column -> board -> project -> owner — same depth
         // as `{comment}`. Cross-owner returns 404; controller's
         // `attachment.card_id !== $card->id` covers cross-card 404s.
-        Route::bind('attachment', function (string $value): CardAttachment {
+        Route::bind('attachment', function (string $value): KanbanAttachment {
             $userId = request()->user()?->id;
             if ($userId === null) {
-                throw (new ModelNotFoundException)->setModel(CardAttachment::class, [$value]);
+                throw (new ModelNotFoundException)->setModel(KanbanAttachment::class, [$value]);
             }
 
-            $attachment = CardAttachment::query()
+            $attachment = KanbanAttachment::query()
                 ->whereHas('card.column.board.project', function ($q) use ($userId): void {
                     $q->where('owner_id', $userId);
                 })
@@ -209,7 +209,7 @@ class AppServiceProvider extends ServiceProvider
                 ->first();
 
             if ($attachment === null) {
-                throw (new ModelNotFoundException)->setModel(CardAttachment::class, [$value]);
+                throw (new ModelNotFoundException)->setModel(KanbanAttachment::class, [$value]);
             }
 
             return $attachment;

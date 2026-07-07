@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Board;
-use App\Models\Card;
-use App\Models\CardAttachment;
-use App\Models\CardComment;
+use App\Models\KanbanAttachment;
+use App\Models\KanbanBoard;
+use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
+use App\Models\KanbanComment;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -81,9 +81,9 @@ final class DemoProjectSeeder extends Seeder
         );
     }
 
-    private function findOrCreateBoard(Project $project): Board
+    private function findOrCreateBoard(Project $project): KanbanBoard
     {
-        return Board::query()->updateOrCreate(
+        return KanbanBoard::query()->updateOrCreate(
             ['project_id' => $project->id, 'name' => 'Demo Board'],
             [
                 'position' => 'm',
@@ -95,7 +95,7 @@ final class DemoProjectSeeder extends Seeder
     /**
      * @return array<string, KanbanColumn>
      */
-    private function findOrCreateColumns(Board $board): array
+    private function findOrCreateColumns(KanbanBoard $board): array
     {
         $names = ['Backlog', 'In Progress', 'Done'];
         $columns = [];
@@ -118,7 +118,7 @@ final class DemoProjectSeeder extends Seeder
 
     /**
      * @param  array<string, KanbanColumn>  $columns
-     * @return array<int, Card>
+     * @return array<int, KanbanCard>
      */
     private function findOrCreateCards(array $columns): array
     {
@@ -134,7 +134,7 @@ final class DemoProjectSeeder extends Seeder
                 // Position: stable lex-rank prefix per card, scoped to the
                 // column. Cards within a column get distinct positions so
                 // order is observable on re-fetch.
-                $cards[] = Card::query()->updateOrCreate(
+                $cards[] = KanbanCard::query()->updateOrCreate(
                     ['column_id' => $columns[$columnName]->id, 'title' => $title],
                     [
                         'body' => "Auto-seeded card: {$title}.",
@@ -149,7 +149,7 @@ final class DemoProjectSeeder extends Seeder
     }
 
     /**
-     * @param  array<int, Card>  $cards
+     * @param  array<int, KanbanCard>  $cards
      */
     private function findOrCreateComments(array $cards, User $user): void
     {
@@ -157,25 +157,25 @@ final class DemoProjectSeeder extends Seeder
         // (exercises thread-per-author semantics).
         $firstCard = $cards[0];
 
-        $root = CardComment::query()->updateOrCreate(
+        $root = KanbanComment::query()->updateOrCreate(
             ['card_id' => $firstCard->id, 'author_id' => $user->id, 'parent_id' => null, 'body' => 'First root comment from demo user.'],
             [],
         );
 
-        CardComment::query()->updateOrCreate(
+        KanbanComment::query()->updateOrCreate(
             ['card_id' => $firstCard->id, 'author_id' => $user->id, 'parent_id' => $root->id, 'body' => 'Self-reply under my own root.'],
             [],
         );
     }
 
-    private function findOrCreateAttachment(Card $card, User $user): CardAttachment
+    private function findOrCreateAttachment(KanbanCard $card, User $user): KanbanAttachment
     {
         // Idempotency key: card + original_filename. The factory generates
         // a UUID-prefixed disk path, but we keep a stable on-disk filename
         // for the demo so the seed run is reproducible.
         $originalFilename = 'sample.png';
 
-        $existing = CardAttachment::query()
+        $existing = KanbanAttachment::query()
             ->where('card_id', $card->id)
             ->where('original_filename', $originalFilename)
             ->first();
@@ -198,8 +198,8 @@ final class DemoProjectSeeder extends Seeder
             throw new \RuntimeException('DemoProjectSeeder failed to write attachment file.');
         }
 
-        return DB::transaction(function () use ($card, $user, $uploaded, $originalFilename, $storedPath): CardAttachment {
-            return CardAttachment::query()->create([
+        return DB::transaction(function () use ($card, $user, $uploaded, $originalFilename, $storedPath): KanbanAttachment {
+            return KanbanAttachment::query()->create([
                 'card_id' => $card->id,
                 'uploader_id' => $user->id,
                 'disk' => 'local',

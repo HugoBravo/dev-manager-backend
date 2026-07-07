@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Board;
+use App\Models\KanbanBoard;
 use App\Models\KanbanColumn;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -33,7 +33,7 @@ class KanbanColumnFactory extends Factory
         $lex = base_convert((string) (10 + $seed), 10, 36);
 
         return [
-            'board_id' => Board::factory(),
+            'board_id' => KanbanBoard::factory(),
             'name' => fake()->words(2, true),
             'position' => 'a'.$lex,
             'archived_at' => null,
@@ -43,7 +43,7 @@ class KanbanColumnFactory extends Factory
     /**
      * Indicate the column belongs to a specific board.
      */
-    public function forBoard(Board $board): static
+    public function forBoard(KanbanBoard $board): static
     {
         return $this->state(fn (): array => [
             'board_id' => $board->id,

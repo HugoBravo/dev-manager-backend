@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use App\Models\Board;
-use App\Models\Card;
-use App\Models\CardAttachment;
-use App\Models\CardComment;
+use App\Models\KanbanAttachment;
+use App\Models\KanbanBoard;
+use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
+use App\Models\KanbanComment;
 use App\Models\Project;
 use App\Models\User;
 use Database\Seeders\DemoProjectSeeder;
@@ -43,41 +43,41 @@ it('seeds the demo user, project, board, columns, cards, comments and attachment
     expect($project)->not->toBeNull();
 
     // 1 board, 3 columns, 5 cards in this dataset.
-    expect(Board::query()->where('project_id', $project?->id)->count())->toBe(1);
+    expect(KanbanBoard::query()->where('project_id', $project?->id)->count())->toBe(1);
     expect(KanbanColumn::query()->whereIn(
         'board_id',
-        Board::query()->where('project_id', $project?->id)->pluck('id')->all()
+        KanbanBoard::query()->where('project_id', $project?->id)->pluck('id')->all()
     )->count())->toBe(3);
 
-    $cardCount = Card::query()->whereIn(
+    $cardCount = KanbanCard::query()->whereIn(
         'column_id',
         KanbanColumn::query()->whereIn(
             'board_id',
-            Board::query()->where('project_id', $project?->id)->pluck('id')->all()
+            KanbanBoard::query()->where('project_id', $project?->id)->pluck('id')->all()
         )->pluck('id')->all()
     )->count();
     expect($cardCount)->toBe(5);
 
     // >= 2 comments + >= 1 attachment across the cards in this project.
-    $commentCount = CardComment::query()->whereIn(
+    $commentCount = KanbanComment::query()->whereIn(
         'card_id',
-        Card::query()->whereIn(
+        KanbanCard::query()->whereIn(
             'column_id',
             KanbanColumn::query()->whereIn(
                 'board_id',
-                Board::query()->where('project_id', $project?->id)->pluck('id')->all()
+                KanbanBoard::query()->where('project_id', $project?->id)->pluck('id')->all()
             )->pluck('id')->all()
         )->pluck('id')->all()
     )->count();
     expect($commentCount)->toBeGreaterThanOrEqual(2);
 
-    $attachmentCount = CardAttachment::query()->whereIn(
+    $attachmentCount = KanbanAttachment::query()->whereIn(
         'card_id',
-        Card::query()->whereIn(
+        KanbanCard::query()->whereIn(
             'column_id',
             KanbanColumn::query()->whereIn(
                 'board_id',
-                Board::query()->where('project_id', $project?->id)->pluck('id')->all()
+                KanbanBoard::query()->where('project_id', $project?->id)->pluck('id')->all()
             )->pluck('id')->all()
         )->pluck('id')->all()
     )->count();
@@ -96,17 +96,17 @@ it('is idempotent — re-running the seeder does not duplicate rows', function (
     expect($project)->not->toBeNull();
 
     // Counts are unchanged after a second pass.
-    expect(Board::query()->where('project_id', $project?->id)->count())->toBe(1);
+    expect(KanbanBoard::query()->where('project_id', $project?->id)->count())->toBe(1);
     expect(KanbanColumn::query()->whereIn(
         'board_id',
-        Board::query()->where('project_id', $project?->id)->pluck('id')->all()
+        KanbanBoard::query()->where('project_id', $project?->id)->pluck('id')->all()
     )->count())->toBe(3);
 
-    $cardCount = Card::query()->whereIn(
+    $cardCount = KanbanCard::query()->whereIn(
         'column_id',
         KanbanColumn::query()->whereIn(
             'board_id',
-            Board::query()->where('project_id', $project?->id)->pluck('id')->all()
+            KanbanBoard::query()->where('project_id', $project?->id)->pluck('id')->all()
         )->pluck('id')->all()
     )->count();
     expect($cardCount)->toBe(5);

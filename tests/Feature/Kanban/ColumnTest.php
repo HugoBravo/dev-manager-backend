@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use App\Models\Board;
+use App\Models\KanbanBoard;
 use App\Models\KanbanColumn;
 use App\Models\Project;
 use App\Models\User;
-use App\Policies\ColumnPolicy;
-use App\Support\Kanban\Position;
+use App\Policies\KanbanColumnPolicy;
+use App\ValueObjects\Kanban\Position;
 use Tests\TestCase;
 
 beforeEach(function (): void {
@@ -37,7 +37,7 @@ it('returns 401 on every column endpoint without a bearer token', function (stri
 it('lists columns of an owned board with a stable position order', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     KanbanColumn::factory()->forBoard($board)->count(3)->create();
 
@@ -55,7 +55,7 @@ it('lists columns of an owned board with a stable position order', function (): 
 it('creates a column in an owned board with 201', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns", [
@@ -77,7 +77,7 @@ it('creates a column in an owned board with 201', function (): void {
 it('rejects create with empty name', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns", ['name' => ''])
@@ -88,7 +88,7 @@ it('rejects create with empty name', function (): void {
 it('rejects create with name longer than 100 chars', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns", [
@@ -101,7 +101,7 @@ it('rejects create with name longer than 100 chars', function (): void {
 it('shows a column to the project owner', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
@@ -115,7 +115,7 @@ it('returns 404 when a non-owner fetches a column (no existence leak)', function
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($stranger, 'sanctum')
@@ -126,7 +126,7 @@ it('returns 404 when a non-owner fetches a column (no existence leak)', function
 it('renames a column for the project owner', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
@@ -142,7 +142,7 @@ it('renames a column for the project owner', function (): void {
 it('rejects update with name longer than 100 chars', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
@@ -157,7 +157,7 @@ it('returns 404 when a non-owner updates a column', function (): void {
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($stranger, 'sanctum')
@@ -172,7 +172,7 @@ it('returns 404 when a non-owner updates a column', function (): void {
 it('deletes an empty column with 204', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
@@ -191,11 +191,11 @@ it('returns 409 with a typed column_has_contents code when destroying a column w
     // HTTP contract (409 + typed code) is locked today.
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->app->bind(
-        ColumnPolicy::class,
+        KanbanColumnPolicy::class,
         fn () => new class
         {
             public function delete(User $user, KanbanColumn $column): bool
@@ -217,7 +217,7 @@ it('returns 404 when a non-owner deletes a column', function (): void {
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($stranger, 'sanctum')
@@ -230,7 +230,7 @@ it('returns 404 when a non-owner deletes a column', function (): void {
 it('archives a column via archived_at (sets timestamp)', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
@@ -247,7 +247,7 @@ it('archives a column via archived_at (sets timestamp)', function (): void {
 it('reorders columns within the same board and persists the new ordering', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $c1 = KanbanColumn::factory()->forBoard($board)->create();
     $c2 = KanbanColumn::factory()->forBoard($board)->create();
@@ -274,8 +274,8 @@ it('reorders columns within the same board and persists the new ordering', funct
 it('rejects reorder with ids from another board', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
-    $otherBoard = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
+    $otherBoard = KanbanBoard::factory()->forProject($project)->create();
 
     $c1 = KanbanColumn::factory()->forBoard($board)->create();
     $c2 = KanbanColumn::factory()->forBoard($board)->create();
@@ -293,7 +293,7 @@ it('returns 404 when a non-owner reorders columns', function (): void {
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $c1 = KanbanColumn::factory()->forBoard($board)->create();
     $c2 = KanbanColumn::factory()->forBoard($board)->create();
 
@@ -307,7 +307,7 @@ it('returns 404 when a non-owner reorders columns', function (): void {
 it('rejects reorder with duplicate ids', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $c1 = KanbanColumn::factory()->forBoard($board)->create();
     $c2 = KanbanColumn::factory()->forBoard($board)->create();
@@ -323,8 +323,8 @@ it('rejects reorder with duplicate ids', function (): void {
 it('moves a column to another board on the same project, preserving the column id', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $sourceBoard = Board::factory()->forProject($project)->create();
-    $targetBoard = Board::factory()->forProject($project)->create();
+    $sourceBoard = KanbanBoard::factory()->forProject($project)->create();
+    $targetBoard = KanbanBoard::factory()->forProject($project)->create();
 
     $column = KanbanColumn::factory()->forBoard($sourceBoard)->create();
 
@@ -356,8 +356,8 @@ it('returns 404 when moving a column to a board owned by a different user', func
     $project = Project::factory()->forOwner($owner)->create();
     $strangerProject = Project::factory()->forOwner($stranger)->create();
 
-    $sourceBoard = Board::factory()->forProject($project)->create();
-    $foreignTargetBoard = Board::factory()->forProject($strangerProject)->create();
+    $sourceBoard = KanbanBoard::factory()->forProject($project)->create();
+    $foreignTargetBoard = KanbanBoard::factory()->forProject($strangerProject)->create();
     $column = KanbanColumn::factory()->forBoard($sourceBoard)->create();
 
     $this->actingAs($owner, 'sanctum')
@@ -378,9 +378,9 @@ it('returns 404 when moving to a same-project board but the column does not belo
     $project = Project::factory()->forOwner($owner)->create();
     $otherProject = Project::factory()->forOwner($owner)->create();
 
-    $sourceBoard = Board::factory()->forProject($project)->create();
-    $targetBoard = Board::factory()->forProject($project)->create();
-    $foreignBoard = Board::factory()->forProject($otherProject)->create();
+    $sourceBoard = KanbanBoard::factory()->forProject($project)->create();
+    $targetBoard = KanbanBoard::factory()->forProject($project)->create();
+    $foreignBoard = KanbanBoard::factory()->forProject($otherProject)->create();
     $foreignColumn = KanbanColumn::factory()->forBoard($foreignBoard)->create();
 
     $this->actingAs($owner, 'sanctum')
@@ -393,7 +393,7 @@ it('returns 404 when moving to a same-project board but the column does not belo
 it('caps column position at 1024 bytes under DB persistence', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create([
         'position' => str_repeat('z', 1024),
     ]);
@@ -404,7 +404,7 @@ it('caps column position at 1024 bytes under DB persistence', function (): void 
 it('exposes the resource shape with id, board_id, name, position, archived_at, timestamps', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
@@ -426,8 +426,8 @@ it('exposes the resource shape with id, board_id, name, position, archived_at, t
 it('does not leak any other board columns when listing one board', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
-    $otherBoard = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
+    $otherBoard = KanbanBoard::factory()->forProject($project)->create();
 
     KanbanColumn::factory()->forBoard($board)->count(2)->create();
     KanbanColumn::factory()->forBoard($otherBoard)->count(3)->create();
@@ -448,7 +448,7 @@ it('returns 404 on list when the user does not own the project', function (): vo
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($stranger, 'sanctum')
         ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns")
@@ -459,7 +459,7 @@ it('returns 404 on store when the user does not own the project', function (): v
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($stranger, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns", [
@@ -479,7 +479,7 @@ it('caps the post-create column position at 1024 bytes at the DB layer', functio
     // the cap is covered in tests/Unit/Kanban/PositionTest.php.
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = Board::factory()->forProject($project)->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $column = KanbanColumn::factory()->forBoard($board)->create([
         'position' => str_repeat('z', Position::MAX_LENGTH),
