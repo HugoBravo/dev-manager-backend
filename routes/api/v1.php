@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\V1\AttachmentController;
 use App\Http\Controllers\Api\V1\BoardController;
 use App\Http\Controllers\Api\V1\CardArchiveController;
 use App\Http\Controllers\Api\V1\CardController;
@@ -106,6 +107,19 @@ Route::middleware(['auth:sanctum', 'throttle:api'])
                     'show' => 'api.v1.projects.kanban.boards.columns.cards.comments.show',
                     'update' => 'api.v1.projects.kanban.boards.columns.cards.comments.update',
                     'destroy' => 'api.v1.projects.kanban.boards.columns.cards.comments.destroy',
+                ]);
+
+            // Attachment lifecycle (Batch 6). Multipart upload, 5 MB cap,
+            // mime allowlist enforced at the FormRequest layer. NO download
+            // endpoint ships in v1 (out of scope per spec). The {attachment}
+            // wildcard route is registered LAST so the apiResource verbs above
+            // resolve first.
+            Route::apiResource('boards/{board}/columns/{column}/cards/{card}/attachments', AttachmentController::class)
+                ->only(['index', 'store', 'destroy'])
+                ->names([
+                    'index' => 'api.v1.projects.kanban.boards.columns.cards.attachments.index',
+                    'store' => 'api.v1.projects.kanban.boards.columns.cards.attachments.store',
+                    'destroy' => 'api.v1.projects.kanban.boards.columns.cards.attachments.destroy',
                 ]);
         });
     });

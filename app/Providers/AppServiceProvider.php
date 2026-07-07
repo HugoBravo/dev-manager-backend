@@ -6,9 +6,11 @@ namespace App\Providers;
 
 use App\Models\Board;
 use App\Models\Card;
+use App\Models\CardAttachment;
 use App\Models\CardComment;
 use App\Models\KanbanColumn;
 use App\Models\Project;
+use App\Policies\AttachmentPolicy;
 use App\Policies\BoardPolicy;
 use App\Policies\CardPolicy;
 use App\Policies\ColumnPolicy;
@@ -53,6 +55,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(KanbanColumn::class, ColumnPolicy::class);
         Gate::policy(Card::class, CardPolicy::class);
         Gate::policy(CardComment::class, CommentPolicy::class);
+        Gate::policy(CardAttachment::class, AttachmentPolicy::class);
 
         // Ownership-scoped route binding for `{board}`. Resolves to 404
         // (ModelNotFoundException) when the board does not belong to a project
@@ -161,6 +164,30 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return $comment;
+        });
+
+        // Ownership-scoped route binding for `{attachment}` (Batch 6).
+        // Walks card -> column -> board -> project -> owner — same depth
+        // as `{comment}`. Cross-owner returns 404; controller's
+        // `attachment.card_id !== $card->id` covers cross-card 404s.
+        Route::bind('attachment', function (string $value): CardAttachment {
+            $userId = request()->user()?->id;
+            if ($userId === null) {
+                throw (new ModelNotFoundException)->setModel(CardAttachment::class, [$value]);
+            }
+
+            $attachment = CardAttachment::query()
+                ->whereHas('card.column.board.project', function ($q) use ($userId): void {
+                    $q->where('owner_id', $userId);
+                })
+                ->whereKey($value)
+                ->first();
+
+            if ($attachment === null) {
+                throw (new ModelNotFoundException)->setModel(CardAttachment::class, [$value]);
+            }
+
+            return $attachment;
         });
     }
 }

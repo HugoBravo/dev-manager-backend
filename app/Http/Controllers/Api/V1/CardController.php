@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Api\V1\Concerns\CascadesCardFiles;
 use App\Http\Controllers\Api\V1\Concerns\ComputesKanbanPositions;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesKanbanChain;
 use App\Http\Controllers\Controller;
@@ -34,6 +35,7 @@ use Illuminate\Support\Facades\DB;
  */
 final class CardController extends Controller
 {
+    use CascadesCardFiles;
     use ComputesKanbanPositions;
     use ResolvesKanbanChain;
 
@@ -126,9 +128,11 @@ final class CardController extends Controller
     }
 
     /**
-     * Hard-delete a card (no soft delete). Batch 5/6 add comments+attachments
-     * cascade; the column_id FK cascade handles any future cards-table-related
-     * deletions. Batch 4 only needs the row gone.
+     * Hard-delete a card (no soft delete). Cascade:
+     *   - `card_comments` rows (FK CASCADE on `card_id`)
+     *   - `card_attachments` rows (FK CASCADE on `card_id`)
+     *   - Attachment FILES on `local` disk (via the `CascadesCardFiles` trait —
+     *     controller-led cascade — see the trait docblock for the rationale)
      */
     public function destroy(Request $request, int $project, Board $board, KanbanColumn $column, Card $card): Response
     {
@@ -137,7 +141,7 @@ final class CardController extends Controller
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
 
-        $card->delete();
+        $this->deleteCardWithFileCascade($card);
 
         return response()->noContent();
     }
