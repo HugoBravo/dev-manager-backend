@@ -65,4 +65,18 @@ class Card extends Model
     {
         return $this->hasMany(CardComment::class);
     }
+
+    /**
+     * Attachments under this card. Cascade-delete at the DB layer removes
+     * the rows when a card is destroyed; the FILES on disk are deleted
+     * explicitly by `CardController::destroy` via the
+     * `CascadesCardFiles` trait (controller-led cascade — see the
+     * `CONTROLLING CASCADE` docblock there).
+     *
+     * @return HasMany<CardAttachment>
+     */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(CardAttachment::class);
+    }
 }
