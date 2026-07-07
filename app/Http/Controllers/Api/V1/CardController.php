@@ -15,6 +15,7 @@ use App\Http\Resources\CardResource;
 use App\Models\Board;
 use App\Models\Card;
 use App\Models\KanbanColumn;
+use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -32,6 +33,13 @@ use Illuminate\Support\Facades\DB;
  * scoping closure in AppServiceProvider + controller-side `resolveOwnedProject`.
  *
  * Markdown body is stored RAW — never HTML-encoded, never sanitized.
+ *
+ * R1 (Batch 7): every action respects the project-level `archived_at`
+ * via the `KanbanRequestScope` helper exposed by `ResolvesKanbanChain`.
+ * An archived project hides cards by default unless the caller passes
+ * `?include_archived=1`. The card-level `?archived=1` query filter
+ * (existing since Batch 4) is orthogonal — it filters the card's own
+ * archive flag, not the project's.
  */
 final class CardController extends Controller
 {
@@ -42,12 +50,19 @@ final class CardController extends Controller
     /**
      * List cards of a column. `?archived=1` includes archived cards (default
      * hides them). Cross-owner → 404 via Route::bind.
+     * R1: archived project → empty list unless `?include_archived=1`.
      */
     public function index(Request $request, int $project, Board $board, KanbanColumn $column): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
+
+        if (! $this->includeArchived($request) && $projectModel->archived_at !== null) {
+            return CardResource::collection(
+                Card::query()->whereRaw('1 = 0')->paginate(25)
+            )->response();
+        }
 
         $includeArchived = $request->boolean('archived');
 
@@ -65,12 +80,14 @@ final class CardController extends Controller
     /**
      * Create a card. Position assigned via `Position::after(rightmost)` —
      * appending to the bottom of the column.
+     * R1: archived project → 404 unless `?include_archived=1`.
      */
     public function store(StoreCardRequest $request, int $project, Board $board, KanbanColumn $column): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
 
         $card = Card::query()->create([
             'column_id' => $column->id,
@@ -85,6 +102,7 @@ final class CardController extends Controller
 
     /**
      * Show one card. Cross-owner → 404 via Route::bind.
+     * R1: archived project → 404 unless `?include_archived=1`.
      */
     public function show(Request $request, int $project, Board $board, KanbanColumn $column, Card $card): JsonResponse
     {
@@ -92,12 +110,14 @@ final class CardController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
 
         return (new CardResource($card))->response();
     }
 
     /**
      * Update title / body / due_date on a card. Cross-owner → 404.
+     * R1: archived project → 404 unless `?include_archived=1`.
      */
     public function update(UpdateCardRequest $request, int $project, Board $board, KanbanColumn $column, Card $card): JsonResponse
     {
@@ -105,6 +125,7 @@ final class CardController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
         $this->authorize('update', $card);
 
         // Body / due_date can be cleared via explicit `null` or `""`.
@@ -133,6 +154,7 @@ final class CardController extends Controller
      *   - `card_attachments` rows (FK CASCADE on `card_id`)
      *   - Attachment FILES on `local` disk (via the `CascadesCardFiles` trait —
      *     controller-led cascade — see the trait docblock for the rationale)
+     * R1: archived project → 404 unless `?include_archived=1`.
      */
     public function destroy(Request $request, int $project, Board $board, KanbanColumn $column, Card $card): Response
     {
@@ -140,6 +162,7 @@ final class CardController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
 
         $this->deleteCardWithFileCascade($card);
 
@@ -151,12 +174,14 @@ final class CardController extends Controller
      * indexed sequence (matches ColumnController::reorder's strategy) so the
      * second fetch yields identical order — O(1) per write, no Position::between
      * (and thus no precision-exhaustion risk on bulk reorder).
+     * R1: archived project → 404 unless `?include_archived=1`.
      */
     public function reorder(ReorderCardsRequest $request, int $project, Board $board, KanbanColumn $column): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
 
         $orderedIds = $request->orderedIds();
 

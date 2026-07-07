@@ -12,6 +12,7 @@ use App\Models\Board;
 use App\Models\Card;
 use App\Models\CardAttachment;
 use App\Models\KanbanColumn;
+use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -38,6 +39,9 @@ use Illuminate\Support\Str;
  *   - Card deletion: handled by `CardController::destroy` via the
  *     `CascadesCardFiles` trait — files are deleted AFTER the row delete
  *     (because FK CASCADE removes the rows first), inside a transaction.
+ *
+ * R1 (Batch 7): every action respects the project-level `archived_at`
+ * via the `KanbanRequestScope` helper exposed by `ResolvesKanbanChain`.
  */
 final class AttachmentController extends Controller
 {
@@ -45,6 +49,7 @@ final class AttachmentController extends Controller
 
     /**
      * List attachments of a card. Pagination page[size]=25 per the spec.
+     * R1: archived project → empty list unless `?include_archived=1`.
      */
     public function index(Request $request, int $project, Board $board, KanbanColumn $column, Card $card): JsonResponse
     {
@@ -52,6 +57,12 @@ final class AttachmentController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+
+        if (! $this->includeArchived($request) && $projectModel->archived_at !== null) {
+            return AttachmentResource::collection(
+                CardAttachment::query()->whereRaw('1 = 0')->paginate(25)
+            )->response();
+        }
 
         $attachments = CardAttachment::query()
             ->where('card_id', $card->id)
@@ -75,6 +86,7 @@ final class AttachmentController extends Controller
      *   5. DB insert inside `DB::transaction`. If the insert throws, the
      *      `catch` deletes the file to avoid orphan disk writes.
      *   6. 201 + `AttachmentResource`.
+     * R1: archived project → 404 unless `?include_archived=1`.
      */
     public function store(StoreAttachmentRequest $request, int $project, Board $board, KanbanColumn $column, Card $card): JsonResponse
     {
@@ -82,6 +94,7 @@ final class AttachmentController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
         $this->authorize('create', CardAttachment::class);
 
         $file = $request->file('file');
@@ -125,6 +138,7 @@ final class AttachmentController extends Controller
      * if `Storage::delete()` throws, the row stays intact and the caller
      * can retry. Then the row is deleted inside a `DB::transaction` so
      * the response is atomic at the HTTP boundary.
+     * R1: archived project → 404 unless `?include_archived=1`.
      */
     public function destroy(Request $request, int $project, Board $board, KanbanColumn $column, Card $card, CardAttachment $attachment): Response
     {
@@ -132,6 +146,7 @@ final class AttachmentController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
 
         // Cross-card guard — the binding closure enforces ownership but
         // not URL-vs-relationship consistency.

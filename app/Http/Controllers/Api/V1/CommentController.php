@@ -13,6 +13,7 @@ use App\Models\Board;
 use App\Models\Card;
 use App\Models\CardComment;
 use App\Models\KanbanColumn;
+use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -31,6 +32,9 @@ use Symfony\Component\HttpFoundation\Response;
  * Thread semantics: thread-per-author. `parent_id` is enforced at the validation
  * layer (same-card + same-author). Cross-author replies create a NEW top-level
  * root (`parent_id` null). The front-end groups siblings into thread views.
+ *
+ * R1 (Batch 7): every action respects the project-level `archived_at`
+ * via the `KanbanRequestScope` helper exposed by `ResolvesKanbanChain`.
  */
 final class CommentController extends Controller
 {
@@ -39,6 +43,7 @@ final class CommentController extends Controller
     /**
      * List comments. Pagination page[size]=25 per the spec. Optional
      * `?parent_id=` filter (returns the children of a specific parent root).
+     * R1: archived project → empty list unless `?include_archived=1`.
      */
     public function index(Request $request, int $project, Board $board, KanbanColumn $column, Card $card): JsonResponse
     {
@@ -46,6 +51,12 @@ final class CommentController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+
+        if (! $this->includeArchived($request) && $projectModel->archived_at !== null) {
+            return CommentResource::collection(
+                CardComment::query()->whereRaw('1 = 0')->paginate(25)
+            )->response();
+        }
 
         $query = CardComment::query()->where('card_id', $card->id);
 
@@ -63,6 +74,7 @@ final class CommentController extends Controller
 
     /**
      * Show a single comment. Cross-owner -> 404.
+     * R1: archived project → 404 unless `?include_archived=1`.
      */
     public function show(Request $request, int $project, Board $board, KanbanColumn $column, Card $card, CardComment $comment): JsonResponse
     {
@@ -70,6 +82,7 @@ final class CommentController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
 
         // The Route::bind('comment') closure already verified ownership through
         // the card chain. We additionally ensure the comment belongs to the
@@ -84,6 +97,7 @@ final class CommentController extends Controller
     /**
      * Create a top-level OR thread-reply comment. 422 on cross-card /
      * cross-author parent_id. The author is the authenticated user.
+     * R1: archived project → 404 unless `?include_archived=1`.
      */
     public function store(StoreCommentRequest $request, int $project, Board $board, KanbanColumn $column, Card $card): JsonResponse
     {
@@ -91,6 +105,7 @@ final class CommentController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
         $this->authorize('create', CardComment::class);
 
         $payload = [
@@ -108,6 +123,7 @@ final class CommentController extends Controller
     /**
      * Edit a comment. The time window + author-vs-author checks happen in
      * UpdateCommentRequest::withValidator() and the policy respectively.
+     * R1: archived project → 404 unless `?include_archived=1`.
      */
     public function update(UpdateCommentRequest $request, int $project, Board $board, KanbanColumn $column, Card $card, CardComment $comment): JsonResponse
     {
@@ -115,6 +131,7 @@ final class CommentController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
 
         if ($comment->card_id !== $card->id) {
             abort(404);
@@ -135,6 +152,7 @@ final class CommentController extends Controller
      * `UpdateCommentRequest` does NOT apply on `destroy` — by design we
      * inline the same window check here so a destroy outside the window
      * returns 422 instead of silently succeeding.
+     * R1: archived project → 404 unless `?include_archived=1`.
      */
     public function destroy(Request $request, int $project, Board $board, KanbanColumn $column, Card $card, CardComment $comment): Response
     {
@@ -142,6 +160,7 @@ final class CommentController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
 
         if ($comment->card_id !== $card->id) {
             abort(404);

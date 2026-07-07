@@ -57,6 +57,31 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(CardComment::class, CommentPolicy::class);
         Gate::policy(CardAttachment::class, AttachmentPolicy::class);
 
+        // Owner-scoped chokepoint (Batch 7 PHPDoc note):
+        //
+        // Every `Route::bind(...)` closure below walks the ownership chain
+        // (project -> owner_id) and returns 404 (ModelNotFoundException) for
+        // cross-owner access. This is the FIRST line of defense for the
+        // 404-not-403 contract documented in design §7. The closures are
+        // ownership-only — they do NOT consider `Project.archived_at`.
+        //
+        // Why archived_at is NOT in the closures:
+        //   The binding closures are scoped to a SINGLE concern (ownership).
+        //   Adding `archived_at` would conflate ownership with lifecycle state
+        //   and force the closure to read the `?include_archived=1` query
+        //   string — coupling two unrelated request attributes to the binding.
+        //   Instead, archived_at is honored at the controller layer via the
+        //   `KanbanRequestScope` trait (see App\Http\Controllers\Api\V1\
+        //   Concerns\KanbanRequestScope). The trait's `ensureNotArchivedProject`
+        //   helper checks `config('kanban.include_archived_default')` and the
+        //   request's `?include_archived=1` flag, then throws ModelNotFoundException
+        //   (404) when the project is archived and the request did not opt in.
+        //
+        // Future contributors: DO NOT add archived_at checks inside these
+        // closures. Keep them single-purpose (ownership scoping only). The
+        // archived_at filter belongs at the controller, where the resolved
+        // Project model is available alongside the Request.
+        //
         // Ownership-scoped route binding for `{board}`. Resolves to 404
         // (ModelNotFoundException) when the board does not belong to a project
         // the authenticated user owns. This is the FIRST line of defense for

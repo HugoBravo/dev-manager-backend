@@ -10,6 +10,7 @@ use App\Http\Resources\CardResource;
 use App\Models\Board;
 use App\Models\Card;
 use App\Models\KanbanColumn;
+use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,6 +21,9 @@ use Illuminate\Http\Request;
  * UI-level flag (`archived_at` is the column the brief explicitly mentions).
  * Both verbs are idempotent — calling archive on an already-archived card
  * returns the unchanged resource; restore on a non-archived card is a no-op.
+ *
+ * R1 (Batch 7): archive/restore on cards of an archived project return 404
+ * unless the caller passes `?include_archived=1`.
  */
 final class CardArchiveController extends Controller
 {
@@ -34,6 +38,7 @@ final class CardArchiveController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
         $this->authorize('archive', $card);
 
         if ($card->archived_at === null) {
@@ -53,6 +58,7 @@ final class CardArchiveController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
         $this->authorize('restore', $card);
 
         if ($card->archived_at !== null) {
