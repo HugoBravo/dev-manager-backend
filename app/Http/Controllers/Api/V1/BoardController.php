@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Exceptions\BoardHasContentsException;
+use App\Http\Controllers\Api\V1\Concerns\KanbanRequestScope;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ReorderBoardsRequest;
 use App\Http\Requests\StoreBoardRequest;
@@ -30,6 +31,8 @@ use Illuminate\Support\Facades\Gate;
  */
 final class BoardController extends Controller
 {
+    use KanbanRequestScope;
+
     /**
      * Base fraction used to seed positions mid-alphabet so prepend/append
      * operations have headroom on either side.
@@ -38,10 +41,19 @@ final class BoardController extends Controller
 
     /**
      * List boards of a project (paginated 25/page; archived boards hidden).
+     * R1: when the project itself is archived, the list is empty unless the
+     * caller passes `?include_archived=1`.
      */
     public function index(Request $request, int $project): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
+
+        // R1 gate: archived projects filter nested resources by default.
+        if (! $this->includeArchived($request) && $projectModel->archived_at !== null) {
+            return BoardResource::collection(
+                Board::query()->whereRaw('1 = 0')->paginate(25)
+            )->response();
+        }
 
         $boards = Board::query()
             ->where('project_id', $projectModel->id)
@@ -72,22 +84,26 @@ final class BoardController extends Controller
 
     /**
      * Show one board (cross-owner -> 404 via binding closure).
+     * R1: archived project returns 404 unless `?include_archived=1`.
      */
     public function show(Request $request, int $project, Board $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
 
         return (new BoardResource($board))->response();
     }
 
     /**
      * Rename a board (cross-owner -> 404 via binding closure).
+     * R1: archived project returns 404 unless `?include_archived=1`.
      */
     public function update(UpdateBoardRequest $request, int $project, Board $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
         $this->authorize('update', $board);
 
         $board->fill($request->validated())->save();
@@ -101,11 +117,13 @@ final class BoardController extends Controller
      * BoardHasContentsException. Until Batch 3 ships the `kanban_columns`
      * table, the destroy succeeds unconditionally for non-empty boards
      * because there's nothing to count — Batch 3 lands the real check.
+     * R1: archived project returns 404 unless `?include_archived=1`.
      */
     public function destroy(Request $request, int $project, Board $board): Response
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
 
         // Column existence check — meaningful only once kanban_columns table
         // exists (Batch 3). On Batch 2 we always return false here so the
@@ -133,12 +151,14 @@ final class BoardController extends Controller
 
     /**
      * Archive a board (sets archived_at). Idempotent: a second call keeps
-     * the original timestamp.
+     * the original timestamp. R1: archived project returns 404 unless
+     * `?include_archived=1`.
      */
     public function archive(Request $request, int $project, Board $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
         $this->authorize('archive', $board);
 
         if ($board->archived_at === null) {
@@ -152,10 +172,12 @@ final class BoardController extends Controller
     /**
      * Reorder boards by id array. Persists monotonically-increasing
      * positions (`m`, `ma`, `maa`, ...) so the list stays stable on re-fetch.
+     * R1: archived project returns 404 unless `?include_archived=1`.
      */
     public function reorder(ReorderBoardsRequest $request, int $project): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
 
         $orderedIds = $request->orderedIds();
 

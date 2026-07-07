@@ -24,4 +24,19 @@ return [
     | KANBAN_COMMENT_EDIT_WINDOW_MINUTES env var without code changes.
     */
     'comment_edit_window_minutes' => (int) env('KANBAN_COMMENT_EDIT_WINDOW_MINUTES', 15),
+
+    /*
+    | Default behaviour for `?include_archived=1` on nested resources.
+    | When `false`, archived projects (where `projects.archived_at` is
+    | non-null) filter their boards/columns/cards/comments/attachments
+    | out of index endpoints and 404 on show endpoints. Override via the
+    | KANBAN_INCLUDE_ARCHIVED_DEFAULT env var.
+    |
+    | This flag is a single source of truth for the helper at
+    | App\Http\Controllers\Api\V1\Concerns\KanbanRequestScope::
+    | includeArchived(). Controllers MUST call that helper, never
+    | `request()->boolean('include_archived')`, so the contract stays
+    | consistent across the chain.
+    */
+    'include_archived_default' => (bool) env('KANBAN_INCLUDE_ARCHIVED_DEFAULT', false),
 ];

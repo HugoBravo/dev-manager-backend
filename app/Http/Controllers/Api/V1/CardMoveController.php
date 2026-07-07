@@ -12,6 +12,7 @@ use App\Http\Resources\CardResource;
 use App\Models\Board;
 use App\Models\Card;
 use App\Models\KanbanColumn;
+use App\Models\Project;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 
@@ -25,6 +26,9 @@ use Illuminate\Http\JsonResponse;
  *
  * Move within the same column is a no-op (the controller returns the
  * resource unchanged) — the test suite may exercise a same-column move.
+ *
+ * R1 (Batch 7): moving a card of an archived project returns 404 unless
+ * the caller passes `?include_archived=1`.
  */
 final class CardMoveController extends Controller
 {
@@ -46,6 +50,7 @@ final class CardMoveController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
         $this->authorize('move', $card);
 
         $targetColumnId = $request->targetColumnId();

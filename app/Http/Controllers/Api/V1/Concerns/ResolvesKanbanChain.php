@@ -22,9 +22,16 @@ use Illuminate\Http\Request;
  * relies on the global handler to render JSON. This is the second line of
  * defense; the `Route::bind()` closures registered in AppServiceProvider
  * already enforce ownership for the route-bound models.
+ *
+ * R1 (Batch 7): this trait composes `KanbanRequestScope` so every nested
+ * controller that pulls `ResolvesKanbanChain` automatically gains access
+ * to `includeArchived()` and `ensureNotArchivedProject()` without
+ * importing the trait separately.
  */
 trait ResolvesKanbanChain
 {
+    use KanbanRequestScope;
+
     /**
      * Resolve the project owned by the authenticated user; 404 otherwise.
      */
