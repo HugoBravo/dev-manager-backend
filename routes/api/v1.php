@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\CardArchiveController;
 use App\Http\Controllers\Api\V1\CardController;
 use App\Http\Controllers\Api\V1\CardMoveController;
 use App\Http\Controllers\Api\V1\ColumnController;
+use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use Illuminate\Support\Facades\Route;
 
@@ -93,5 +94,18 @@ Route::middleware(['auth:sanctum', 'throttle:api'])
 
             Route::post('boards/{board}/columns/{column}/cards/{card}/move', [CardMoveController::class, 'move'])
                 ->name('api.v1.projects.kanban.boards.columns.cards.move');
+
+            // Comment lifecycle (Batch 5). Thread-per-author; 15-minute edit
+            // window enforced via config('kanban.comment_edit_window_minutes').
+            // The {comment} wildcard route is registered LAST so the apiResource
+            // verbs above resolve first.
+            Route::apiResource('boards/{board}/columns/{column}/cards/{card}/comments', CommentController::class)
+                ->names([
+                    'index' => 'api.v1.projects.kanban.boards.columns.cards.comments.index',
+                    'store' => 'api.v1.projects.kanban.boards.columns.cards.comments.store',
+                    'show' => 'api.v1.projects.kanban.boards.columns.cards.comments.show',
+                    'update' => 'api.v1.projects.kanban.boards.columns.cards.comments.update',
+                    'destroy' => 'api.v1.projects.kanban.boards.columns.cards.comments.destroy',
+                ]);
         });
     });

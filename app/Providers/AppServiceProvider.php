@@ -6,11 +6,13 @@ namespace App\Providers;
 
 use App\Models\Board;
 use App\Models\Card;
+use App\Models\CardComment;
 use App\Models\KanbanColumn;
 use App\Models\Project;
 use App\Policies\BoardPolicy;
 use App\Policies\CardPolicy;
 use App\Policies\ColumnPolicy;
+use App\Policies\CommentPolicy;
 use App\Policies\ProjectPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -50,6 +52,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Board::class, BoardPolicy::class);
         Gate::policy(KanbanColumn::class, ColumnPolicy::class);
         Gate::policy(Card::class, CardPolicy::class);
+        Gate::policy(CardComment::class, CommentPolicy::class);
 
         // Ownership-scoped route binding for `{board}`. Resolves to 404
         // (ModelNotFoundException) when the board does not belong to a project
@@ -134,6 +137,30 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return $card;
+        });
+
+        // Ownership-scoped route binding for `{comment}` (Batch 5). Walks
+        // card -> column -> board -> project -> owner — the deepest chain
+        // in the kanban URLs. Cross-owner returns 404; controller's
+        // `comment.card_id !== $card->id` check covers cross-card 404s.
+        Route::bind('comment', function (string $value): CardComment {
+            $userId = request()->user()?->id;
+            if ($userId === null) {
+                throw (new ModelNotFoundException)->setModel(CardComment::class, [$value]);
+            }
+
+            $comment = CardComment::query()
+                ->whereHas('card.column.board.project', function ($q) use ($userId): void {
+                    $q->where('owner_id', $userId);
+                })
+                ->whereKey($value)
+                ->first();
+
+            if ($comment === null) {
+                throw (new ModelNotFoundException)->setModel(CardComment::class, [$value]);
+            }
+
+            return $comment;
         });
     }
 }

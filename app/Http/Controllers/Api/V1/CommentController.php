@@ -1,0 +1,166 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Http\Controllers\Api\V1\Concerns\ResolvesKanbanChain;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreCommentRequest;
+use App\Http\Requests\UpdateCommentRequest;
+use App\Http\Resources\CommentResource;
+use App\Models\Board;
+use App\Models\Card;
+use App\Models\CardComment;
+use App\Models\KanbanColumn;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * CommentController — card comments under
+ * /api/v1/projects/{project}/kanban/boards/{board}/columns/{column}/cards/{card}/comments
+ *
+ * Authorization:
+ *  - view (`index`, `show`): ownership via `Route::bind('comment', ...)` and
+ *    `Route::bind('card', ...)` -> 404 cross-owner
+ *  - create / update / destroy: `authorize(...)` on the policy raises 403 for
+ *    cross-author actions INSIDE an owned project (the documented 403 exception)
+ *  - edit window: 422 validation error via `UpdateCommentRequest::withValidator`
+ *
+ * Thread semantics: thread-per-author. `parent_id` is enforced at the validation
+ * layer (same-card + same-author). Cross-author replies create a NEW top-level
+ * root (`parent_id` null). The front-end groups siblings into thread views.
+ */
+final class CommentController extends Controller
+{
+    use ResolvesKanbanChain;
+
+    /**
+     * List comments. Pagination page[size]=25 per the spec. Optional
+     * `?parent_id=` filter (returns the children of a specific parent root).
+     */
+    public function index(Request $request, int $project, Board $board, KanbanColumn $column, Card $card): JsonResponse
+    {
+        $projectModel = $this->resolveOwnedProject($request, $project);
+        $this->ensureBoardBelongsToProject($board, $projectModel);
+        $this->ensureColumnBelongsToBoard($column, $board);
+        $this->ensureCardBelongsToColumn($card, $column);
+
+        $query = CardComment::query()->where('card_id', $card->id);
+
+        if ($request->filled('parent_id')) {
+            $query->where('parent_id', (int) $request->input('parent_id'));
+        }
+
+        $comments = $query
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->paginate(25);
+
+        return CommentResource::collection($comments)->response();
+    }
+
+    /**
+     * Show a single comment. Cross-owner -> 404.
+     */
+    public function show(Request $request, int $project, Board $board, KanbanColumn $column, Card $card, CardComment $comment): JsonResponse
+    {
+        $projectModel = $this->resolveOwnedProject($request, $project);
+        $this->ensureBoardBelongsToProject($board, $projectModel);
+        $this->ensureColumnBelongsToBoard($column, $board);
+        $this->ensureCardBelongsToColumn($card, $column);
+
+        // The Route::bind('comment') closure already verified ownership through
+        // the card chain. We additionally ensure the comment belongs to the
+        // URL card so a cross-card request still 404s.
+        if ($comment->card_id !== $card->id) {
+            abort(404);
+        }
+
+        return (new CommentResource($comment))->response();
+    }
+
+    /**
+     * Create a top-level OR thread-reply comment. 422 on cross-card /
+     * cross-author parent_id. The author is the authenticated user.
+     */
+    public function store(StoreCommentRequest $request, int $project, Board $board, KanbanColumn $column, Card $card): JsonResponse
+    {
+        $projectModel = $this->resolveOwnedProject($request, $project);
+        $this->ensureBoardBelongsToProject($board, $projectModel);
+        $this->ensureColumnBelongsToBoard($column, $board);
+        $this->ensureCardBelongsToColumn($card, $column);
+        $this->authorize('create', CardComment::class);
+
+        $payload = [
+            'card_id' => $card->id,
+            'author_id' => $request->user()->id,
+            'parent_id' => $request->validated('parent_id'),
+            'body' => $request->validated('body'),
+        ];
+
+        $comment = CardComment::query()->create($payload);
+
+        return (new CommentResource($comment))->response()->setStatusCode(201);
+    }
+
+    /**
+     * Edit a comment. The time window + author-vs-author checks happen in
+     * UpdateCommentRequest::withValidator() and the policy respectively.
+     */
+    public function update(UpdateCommentRequest $request, int $project, Board $board, KanbanColumn $column, Card $card, CardComment $comment): JsonResponse
+    {
+        $projectModel = $this->resolveOwnedProject($request, $project);
+        $this->ensureBoardBelongsToProject($board, $projectModel);
+        $this->ensureColumnBelongsToBoard($column, $board);
+        $this->ensureCardBelongsToColumn($card, $column);
+
+        if ($comment->card_id !== $card->id) {
+            abort(404);
+        }
+
+        $this->authorize('update', $comment);
+
+        // `request->input()` preserves the falsy-vs-empty semantics the
+        // body rule already constrained.
+        $comment->body = $request->input('body');
+        $comment->save();
+
+        return (new CommentResource($comment->fresh()))->response();
+    }
+
+    /**
+     * Delete a comment by its author. The window check inside
+     * `UpdateCommentRequest` does NOT apply on `destroy` — by design we
+     * inline the same window check here so a destroy outside the window
+     * returns 422 instead of silently succeeding.
+     */
+    public function destroy(Request $request, int $project, Board $board, KanbanColumn $column, Card $card, CardComment $comment): Response
+    {
+        $projectModel = $this->resolveOwnedProject($request, $project);
+        $this->ensureBoardBelongsToProject($board, $projectModel);
+        $this->ensureColumnBelongsToBoard($column, $board);
+        $this->ensureCardBelongsToColumn($card, $column);
+
+        if ($comment->card_id !== $card->id) {
+            abort(404);
+        }
+
+        $this->authorize('delete', $comment);
+
+        $windowMinutes = (int) config('kanban.comment_edit_window_minutes');
+        $minutesSinceCreation = $comment->created_at?->diffInMinutes(now()) ?? 0;
+
+        if ($minutesSinceCreation > $windowMinutes) {
+            return response()->json([
+                'message' => "Comment delete window of {$windowMinutes} minute(s) has expired.",
+                'errors' => ['body' => ["Comment delete window of {$windowMinutes} minute(s) has expired."]],
+            ], 422);
+        }
+
+        $comment->delete();
+
+        return response()->noContent();
+    }
+}

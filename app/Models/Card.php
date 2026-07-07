@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A card is the atom of the kanban. Belongs to exactly one column (at a time);
@@ -51,5 +52,17 @@ class Card extends Model
     public function column(): BelongsTo
     {
         return $this->belongsTo(KanbanColumn::class, 'column_id');
+    }
+
+    /**
+     * Comments under this card. Used by the comment cascade when a card is
+     * destroyed (FK CASCADE handles DB rows; this relationship is exposed
+     * for the front-end to enumerate active thread roots).
+     *
+     * @return HasMany<CardComment>
+     */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(CardComment::class);
     }
 }
