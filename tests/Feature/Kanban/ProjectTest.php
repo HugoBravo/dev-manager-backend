@@ -177,7 +177,7 @@ it('returns 404 when a non-owner deletes a project', function (): void {
     expect(Project::query()->find($project->id))->not->toBeNull();
 });
 
-it('returns the resource shape with id, name, description, owner_id and timestamps', function (): void {
+it('returns the resource shape with id, name, description, owner_id, slug, archived_at and timestamps', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->for($owner, 'owner')->create();
 
@@ -189,9 +189,94 @@ it('returns the resource shape with id, name, description, owner_id and timestam
                 'id',
                 'name',
                 'description',
+                'slug',
+                'archived_at',
                 'owner_id',
                 'created_at',
                 'updated_at',
             ],
         ]);
+});
+
+it('persists a slug when creating a project with one', function (): void {
+    $owner = User::factory()->create();
+
+    $response = $this->actingAs($owner, 'sanctum')
+        ->postJson('/api/v1/projects', [
+            'name' => 'My Project',
+            'description' => 'with slug',
+            'slug' => 'my-project',
+        ])
+        ->assertCreated();
+
+    expect($response->json('data.slug'))->toBe('my-project');
+
+    $project = Project::query()->findOrFail($response->json('data.id'));
+    expect($project->slug)->toBe('my-project');
+});
+
+it('updates the slug when patching a project', function (): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->for($owner, 'owner')->create([
+        'slug' => 'original-slug',
+    ]);
+
+    $this->actingAs($owner, 'sanctum')
+        ->patchJson("/api/v1/projects/{$project->id}", ['slug' => 'renamed-slug'])
+        ->assertOk()
+        ->assertJsonPath('data.slug', 'renamed-slug');
+
+    expect($project->fresh()->slug)->toBe('renamed-slug');
+});
+
+it('excludes archived projects from the index by default', function (): void {
+    $owner = User::factory()->create();
+
+    $active = Project::factory()->for($owner, 'owner')->create(['archived_at' => null]);
+    $archived = Project::factory()->for($owner, 'owner')->create([
+        'archived_at' => now()->subDay(),
+    ]);
+
+    $response = $this->actingAs($owner, 'sanctum')
+        ->getJson('/api/v1/projects')
+        ->assertOk();
+
+    $ids = collect($response->json('data'))->map(fn ($i) => $i['data']['id'])->all();
+
+    expect($ids)->toContain($active->id)
+        ->and($ids)->not->toContain($archived->id);
+});
+
+it('includes archived projects on the index when ?include_archived=1 is set', function (): void {
+    $owner = User::factory()->create();
+
+    $active = Project::factory()->for($owner, 'owner')->create(['archived_at' => null]);
+    $archived = Project::factory()->for($owner, 'owner')->create([
+        'archived_at' => now()->subDay(),
+    ]);
+
+    $response = $this->actingAs($owner, 'sanctum')
+        ->getJson('/api/v1/projects?include_archived=1')
+        ->assertOk();
+
+    $ids = collect($response->json('data'))->map(fn ($i) => $i['data']['id'])->all();
+
+    expect($ids)->toContain($active->id)
+        ->and($ids)->toContain($archived->id);
+});
+
+it('sets archived_at when patching a project', function (): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->for($owner, 'owner')->create(['archived_at' => null]);
+
+    expect($project->archived_at)->toBeNull();
+
+    $this->actingAs($owner, 'sanctum')
+        ->patchJson("/api/v1/projects/{$project->id}", [
+            'archived_at' => now()->toIso8601String(),
+        ])
+        ->assertOk();
+
+    $fresh = $project->fresh();
+    expect($fresh->archived_at)->not->toBeNull();
 });

@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Resources;
+namespace App\Http\Resources\Kanban;
 
-use App\Models\Project;
+use App\Models\KanbanColumn;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin Project
+ * @mixin KanbanColumn
  */
-final class ProjectResource extends JsonResource
+final class ColumnResource extends JsonResource
 {
     /**
      * @return array<string, mixed>
@@ -21,11 +21,10 @@ final class ProjectResource extends JsonResource
         return [
             'data' => [
                 'id' => $this->resource->id,
+                'board_id' => $this->resource->board_id,
                 'name' => $this->resource->name,
-                'description' => $this->resource->description,
-                'slug' => $this->resource->slug,
+                'position' => $this->resource->position,
                 'archived_at' => optional($this->resource->archived_at)?->toIso8601String(),
-                'owner_id' => $this->resource->owner_id,
                 'created_at' => optional($this->resource->created_at)?->toIso8601String(),
                 'updated_at' => optional($this->resource->updated_at)?->toIso8601String(),
             ],
