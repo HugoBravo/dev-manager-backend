@@ -5,9 +5,38 @@ on:
 
 name: 🚀 Deploy api on push (Main)
 jobs:
+  tests:
+    name: 🧪 Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🚚 Get latest code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+
+      - name: Cache Composer packages
+        id: composer-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
+
+      - name: 🔨 Install dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: ✅ Run tests
+        run: composer test
+
   deploy:
     name: 🎉 Deploy
     runs-on: ubuntu-latest
+    needs: tests
+    if: needs.tests.result == 'success'
     steps:
       - name: 🚚 Get latest code
         uses: actions/checkout@v4
@@ -29,8 +58,8 @@ jobs:
       - name: 🔨 Install dependencies
         run: composer install --prefer-dist --no-progress
 
-      # - name: 🔑 Set .env campobase
-      #   run: cp -f .env.campobase .env
+      # - name: 🔑 Set .env llamadev
+      #   run: cp -f .env.llamadev .env
 
       - name: 📂 Sync files
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
@@ -43,5 +72,3 @@ jobs:
             **/.git*/**
             **/storage/**
             **/public/**
-
-   
