@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # scripts/dump-dev-db.sh
-# Dumps the development database to database/backups/dev/<db>_<YYYYMMDD>_<HHMMSS>.dump
-# Uses pg_dump from MacPorts (PostgreSQL 18) with custom format + gzip.
+# Dumps the development database to database/backups/dev/<db>_<YYYYMMDD>_<HHMMSS>.sql
+# Uses pg_dump from MacPorts (PostgreSQL 18) with plain text format so the file
+# can be loaded by a restricted pgAdmin ("Run SQL script" / psql-style execution).
 
 set -euo pipefail
 
@@ -80,14 +81,14 @@ for var in DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD; do
 done
 
 # ---------------------------------------------------------------------------
-# Build output filename: <dbname>_YYYYMMDD_HHMMSS.dump
+# Build output filename: <dbname>_YYYYMMDD_HHMMSS.sql
 # ---------------------------------------------------------------------------
 mkdir -p "${BACKUP_DIR}"
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 # Sanitize DB name for filesystem (strip whitespace, keep alnum/_-.)
 SAFE_DB_NAME="$(printf '%s' "${DB_DATABASE}" | tr -d '[:space:]')"
-OUTPUT_FILE="${BACKUP_DIR}/${SAFE_DB_NAME}_${TIMESTAMP}.dump"
+OUTPUT_FILE="${BACKUP_DIR}/${SAFE_DB_NAME}_${TIMESTAMP}.sql"
 
 echo "==> Dumping '${DB_DATABASE}' from ${DB_HOST}:${DB_PORT}"
 echo "==> Using ${PG_DUMP}"
@@ -95,9 +96,17 @@ echo "==> Writing ${OUTPUT_FILE}"
 
 # ---------------------------------------------------------------------------
 # Run pg_dump.
-#   -Fc  : custom format (compressed, supports selective restore)
-#   -Z0  : no extra compression (custom format already compresses)
-#   PGPASSWORD is passed via env to avoid leaking in `ps`
+#   --format=plain : emits a single plain-text SQL script. This is the only
+#                    format the restricted pgAdmin "Run SQL script" / psql
+#                    execution path can ingest; custom/directory formats
+#                    require pg_restore which is not available.
+#   --no-owner     : skip ownership commands (we are applying on prod where
+#                    the role likely differs).
+#   --clean --if-exists : emit DROP ... IF EXISTS before CREATE, so the script
+#                    can be run against a non-empty schema. pgAdmin's
+#                    restricted uploader often runs the script in a single
+#                    transaction; this keeps it idempotent-ish.
+#   PGPASSWORD     : passed via env to avoid leaking in `ps`.
 # ---------------------------------------------------------------------------
 PGPASSWORD="${DB_PASSWORD}" "${PG_DUMP}" \
   --host="${DB_HOST}" \
@@ -107,8 +116,7 @@ PGPASSWORD="${DB_PASSWORD}" "${PG_DUMP}" \
   --no-owner \
   --clean \
   --if-exists \
-  --format=custom \
-  --compress=0 \
+  --format=plain \
   --file="${OUTPUT_FILE}"
 
 echo "==> Done. $(du -h "${OUTPUT_FILE}" | cut -f1) at ${OUTPUT_FILE}"

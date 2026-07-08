@@ -35,6 +35,20 @@ final class CardResource extends JsonResource
                 'position' => $this->resource->position,
                 'due_date' => $this->resource->due_date?->toDateString(),
                 'archived_at' => optional($this->resource->archived_at)?->toIso8601String(),
+                // Labels are eager-loaded by CardController via
+                // `with('labels:id,name,color')`. The empty-array default
+                // keeps the response shape stable when the relation is
+                // not preloaded (e.g. in unit tests that hit the resource
+                // directly without a controller).
+                'labels' => $this->resource->relationLoaded('labels')
+                    ? $this->resource->labels
+                        ->map(fn ($label): array => [
+                            'id' => $label->id,
+                            'name' => $label->name,
+                            'color' => $label->color,
+                        ])
+                        ->all()
+                    : [],
                 'created_at' => optional($this->resource->created_at)?->toIso8601String(),
                 'updated_at' => optional($this->resource->updated_at)?->toIso8601String(),
             ],

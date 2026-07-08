@@ -6,9 +6,11 @@ use App\Http\Controllers\Api\V1\Kanban\AttachmentController;
 use App\Http\Controllers\Api\V1\Kanban\BoardController;
 use App\Http\Controllers\Api\V1\Kanban\CardArchiveController;
 use App\Http\Controllers\Api\V1\Kanban\CardController;
+use App\Http\Controllers\Api\V1\Kanban\CardLabelController;
 use App\Http\Controllers\Api\V1\Kanban\CardMoveController;
 use App\Http\Controllers\Api\V1\Kanban\ColumnController;
 use App\Http\Controllers\Api\V1\Kanban\CommentController;
+use App\Http\Controllers\Api\V1\Kanban\KanbanLabelController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use Illuminate\Support\Facades\Route;
 
@@ -96,6 +98,13 @@ Route::middleware(['auth:sanctum', 'throttle:api'])
             Route::post('boards/{board}/columns/{column}/cards/{card}/move', [CardMoveController::class, 'move'])
                 ->name('api.v1.projects.kanban.boards.columns.cards.move');
 
+            // Card ↔ label sync (Kanban labels feature). Replaces the set of
+            // labels on the card with the supplied id list. Body shape is
+            // `{ "label_ids": [1, 2, 3] }`; empty array clears. Cross-owner
+            // resolves to 404 via the {card} Route::bind closure.
+            Route::put('boards/{board}/columns/{column}/cards/{card}/labels', [CardLabelController::class, 'sync'])
+                ->name('api.v1.projects.kanban.boards.columns.cards.labels.sync');
+
             // Comment lifecycle (Batch 5). Thread-per-author; 15-minute edit
             // window enforced via config('kanban.comment_edit_window_minutes').
             // The {comment} wildcard route is registered LAST so the apiResource
@@ -122,4 +131,22 @@ Route::middleware(['auth:sanctum', 'throttle:api'])
                     'destroy' => 'api.v1.projects.kanban.boards.columns.cards.attachments.destroy',
                 ]);
         });
+
+        // Kanban labels (global per user, NOT scoped to a project). A user
+        // has one set of labels and applies them to cards across all their
+        // projects. Routes live OUTSIDE the `/projects/{project}/kanban/...`
+        // prefix by design.
+        //
+        // Parameter name `{label}` (not `{kanban_label}`) so Laravel's
+        // implicit binding resolves to `KanbanLabel::query()->whereKey($value)`
+        // instead of looking for a `kanban_label` column.
+        Route::apiResource('kanban-labels', KanbanLabelController::class)
+            ->parameters(['kanban-labels' => 'label'])
+            ->names([
+                'index' => 'api.v1.kanban-labels.index',
+                'store' => 'api.v1.kanban-labels.store',
+                'show' => 'api.v1.kanban-labels.show',
+                'update' => 'api.v1.kanban-labels.update',
+                'destroy' => 'api.v1.kanban-labels.destroy',
+            ]);
     });

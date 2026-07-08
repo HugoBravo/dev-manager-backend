@@ -22,13 +22,14 @@ the `kanban_*` prefix.
 7. [Cards](#7-cards)
 8. [Comments](#8-comments)
 9. [Attachments](#9-attachments)
-10. [Status codes & error envelope](#10-status-codes--error-envelope)
-11. [Cascade behavior](#11-cascade-behavior)
-12. [Position ordering (fractional indexing)](#12-position-ordering-fractional-indexing)
-13. [Markdown body contract](#13-markdown-body-contract)
-14. [Thread-per-author comments](#14-thread-per-author-comments)
-15. [Out-of-scope (do not expect)](#15-out-of-scope-do-not-expect)
-16. [SQL table reference](#16-sql-table-reference)
+10. [Labels](#10-labels)
+11. [Status codes & error envelope](#11-status-codes--error-envelope)
+12. [Cascade behavior](#12-cascade-behavior)
+13. [Position ordering (fractional indexing)](#13-position-ordering-fractional-indexing)
+14. [Markdown body contract](#14-markdown-body-contract)
+15. [Thread-per-author comments](#15-thread-per-author-comments)
+16. [Out-of-scope (do not expect)](#16-out-of-scope-do-not-expect)
+17. [SQL table reference](#17-sql-table-reference)
 
 ---
 
@@ -232,6 +233,10 @@ project and **every nested resource** is hidden from default requests; pass
   "due_date": "2026-07-15",
   "archived_at": null,
   "position": "k",
+  "labels": [
+    { "id": 4, "name": "bug", "color": "#ef4444" },
+    { "id": 7, "name": "p1", "color": "#f59e0b" }
+  ],
   "created_at": "2026-07-07T15:42:18.000000Z",
   "updated_at": "2026-07-07T15:42:18.000000Z"
 }
@@ -239,6 +244,9 @@ project and **every nested resource** is hidden from default requests; pass
 
 `body` is **raw Markdown**, NOT HTML. See [Markdown body contract](#13-markdown-body-contract).
 `due_date` is `YYYY-MM-DD` or `null`.
+`labels` is the list of labels applied to the card. See [Labels](#10-labels) for
+the resource and endpoint details. The array is always present; empty when
+the card has no labels.
 
 ### 3.5 Comment
 
@@ -277,6 +285,21 @@ See [Thread-per-author comments](#14-thread-per-author-comments) for `parent_id`
 `url` is currently `null` — the download endpoint is **out of scope** in v1.
 The frontend can construct a download URL by reading `path` once the download
 endpoint lands in a future change. Until then, **attachments are write-only**.
+
+### 3.7 Label
+
+```json
+{
+  "id": 4,
+  "name": "bug",
+  "color": "#ef4444",
+  "created_at": "2026-07-07T15:42:18.000000Z",
+  "updated_at": "2026-07-07T15:42:18.000000Z"
+}
+```
+
+`color` is a 7-char `#RRGGBB` hex string. The backend accepts both
+lowercase and uppercase hex digits and stores the value verbatim.
 
 ---
 
@@ -852,7 +875,110 @@ Removes the row and the file from disk in a single transaction.
 
 ---
 
-## 10. Status codes & error envelope
+## 10. Labels
+
+Labels are **user-scoped** color tags. A user has ONE set of labels and can
+apply any of them to any card in any of their projects. Labels are NOT
+scoped to a project — two different users can each have a label called
+`bug` with the same or different colors.
+
+The label endpoints are NOT nested under `/projects/{project}/kanban/...`;
+they live at the v1 root:
+
+```
+/api/v1/kanban-labels
+```
+
+### 10.1 List labels
+
+```
+GET /api/v1/kanban-labels
+```
+
+Returns the authenticated user's labels. Paginated, page size 25.
+
+### 10.2 Create label
+
+```
+POST /api/v1/kanban-labels
+```
+
+**Body**
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `name` | string | yes | 1-64 chars; unique per user (a different user may have a label with the same name) |
+| `color` | string | yes | `#RRGGBB` (7-char hex, lower- or upper-case digits accepted) |
+
+On `name` collision for the same user → **422** with field error
+`The name has already been taken.`
+
+**Response**: 201 Created with the new [Label](#37-label).
+
+### 10.3 Show label
+
+```
+GET /api/v1/kanban-labels/{label}
+```
+
+Cross-user fetch returns **404** (no existence leak).
+
+### 10.4 Update label
+
+```
+PATCH /api/v1/kanban-labels/{label}
+```
+
+Body: `name` and/or `color` (both optional). Same constraints as create.
+The `name` uniqueness check ignores the current label id (renaming to
+itself is a no-op).
+
+### 10.5 Delete label
+
+```
+DELETE /api/v1/kanban-labels/{label}
+```
+
+Hard-deletes the label. The pivot rows in `kanban_card_label` are
+removed automatically by the FK cascade. The cards themselves are
+NOT deleted; they simply lose this label.
+
+**Response**: 204 No Content.
+
+### 10.6 Sync labels on a card
+
+```
+PUT /api/v1/projects/{project}/kanban/boards/{board}/columns/{column}/cards/{card}/labels
+```
+
+**Body**
+
+```json
+{ "label_ids": [4, 7] }
+```
+
+Replaces the current set of labels on the card with the supplied list.
+Empty array clears all labels. Each `label_id` MUST belong to the
+authenticated user — cross-user ids are rejected with **422** (no
+existence leak).
+
+**Response**: 200 OK with the updated [Card](#34-card) (which now
+includes the new `labels` array).
+
+| Condition | Status |
+|---|---|
+| Cross-owner access | 404 |
+| `label_ids` missing | 422 |
+| `label_ids` not an array | 422 |
+| Any `label_id` is not an integer | 422 |
+| Duplicate `label_id` values | 422 |
+| Any `label_id` does not exist OR belongs to another user | 422 |
+| Project archived and `include_archived=0` | 404 |
+| Card belongs to a different column on the same board | 404 |
+
+---
+
+## 11. Status codes & error envelope
 
 | Status | When |
 |---|---|
@@ -1038,7 +1164,6 @@ Angular features that assume they exist will fail.
 | Project sharing (`project_user` pivot, roles) | Not implemented | Future change |
 | Notifications (any channel) | Not implemented | Future change |
 | Webhooks (incoming or outgoing) | Not implemented | Future change |
-| Labels / tags on cards | Not implemented | Future change |
 | Checklists on cards | Not implemented | Future change |
 | Activity log / event stream | Not implemented | Future change |
 | Full-text search across cards | Not implemented | Future change |
@@ -1066,6 +1191,8 @@ above, not by these table names.
 | `kanban_cards` | Cards inside a column (carries Markdown body) |
 | `kanban_comments` | Comments inside a card (thread-per-author) |
 | `kanban_attachments` | File metadata for attachments; files live on `local` disk |
+| `kanban_labels` | User-owned color tags applied to cards across the user's projects |
+| `kanban_card_label` | Many-to-many pivot between `kanban_cards` and `kanban_labels` |
 
 ### Foreign-key chain
 
@@ -1075,6 +1202,9 @@ kanban_boards.id      ← kanban_columns.board_id  (cascadeOnDelete)
 kanban_columns.id     ← kanban_cards.column_id   (cascadeOnDelete)
 kanban_cards.id       ← kanban_comments.card_id  (cascadeOnDelete)
 kanban_cards.id       ← kanban_attachments.card_id (cascadeOnDelete)
+kanban_cards.id       ← kanban_card_label.card_id  (cascadeOnDelete; composite PK with label_id)
+kanban_labels.id      ← kanban_card_label.label_id (cascadeOnDelete)
+users.id              ← kanban_labels.user_id     (cascadeOnDelete)
 kanban_comments.id    ← kanban_comments.parent_id (cascadeOnDelete; self-ref, same-author)
 users.id              ← projects.owner_id         (cascadeOnDelete)
 users.id              ← kanban_comments.author_id (nullOnDelete)

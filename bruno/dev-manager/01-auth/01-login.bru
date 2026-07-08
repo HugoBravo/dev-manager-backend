@@ -5,7 +5,7 @@ meta {
 }
 
 post {
-  url: {{baseUrl}}/api/auth/login
+  url: http://localhost:8000/api/auth/login
   body: json
   auth: none
 }
@@ -17,28 +17,10 @@ headers {
 
 body:json {
   {
-    "email": "{{email}}",
-    "password": "{{password}}",
+    "email": "hugo@llamadev.cl",
+    "password": "22deenero",
     "device_name": "bruno-cli"
   }
-}
-
-docs {
-  # Login against the bearer-mode endpoint.
-
-  Backend behavior (`auth-bearer-mode-2026`):
-  - Validates `email` + `password` against the `users` table.
-  - On success returns 200 with body `{ user, token }`:
-    - `user` is the `UserResource` envelope: `{ data: { id, name, email, email_verified_at } }`.
-    - `token` is a Sanctum personal access token in the format `id|secret`.
-
-  This request captures the token into the `bearerToken` env var so
-  subsequent requests can authenticate via `Authorization: Bearer`.
-
-  Expected: 200, `user.data.email`, `token` matching `/^\d+\|[A-Za-z0-9]+$/`.
-
-  Pitfall: `email` + `password` must match an existing user. Seed a user
-  via tinker or use the seeded `jane@example.com` user.
 }
 
 script:post-response {
@@ -50,4 +32,22 @@ script:post-response {
   } catch (e) {
     // ignore — body might be empty for non-2xx responses
   }
+}
+
+docs {
+  # Login against the bearer-mode endpoint.
+  
+  Backend behavior (`auth-bearer-mode-2026`):
+  - Validates `email` + `password` against the `users` table.
+  - On success returns 200 with body `{ user, token }`:
+    - `user` is the `UserResource` envelope: `{ data: { id, name, email, email_verified_at } }`.
+    - `token` is a Sanctum personal access token in the format `id|secret`.
+  
+  This request captures the token into the `bearerToken` env var so
+  subsequent requests can authenticate via `Authorization: Bearer`.
+  
+  Expected: 200, `user.data.email`, `token` matching `/^\d+\|[A-Za-z0-9]+$/`.
+  
+  Pitfall: `email` + `password` must match an existing user. Seed a user
+  via tinker or use the seeded `jane@example.com` user.
 }

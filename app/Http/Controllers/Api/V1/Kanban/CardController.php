@@ -72,7 +72,13 @@ final class CardController extends Controller
             $query->whereNull('archived_at');
         }
 
-        $cards = $query->orderBy('position')->paginate(25);
+        // Eager-load the labels pivot so `CardResource` does not trigger
+        // an N+1 query per card on the response. The `select` keeps the
+        // payload minimal (id/name/color) — we don't need timestamps
+        // for the label embed.
+        $cards = $query->with(['labels:id,name,color'])
+            ->orderBy('position')
+            ->paginate(25);
 
         return CardResource::collection($cards)->response();
     }
@@ -96,6 +102,7 @@ final class CardController extends Controller
             'due_date' => $request->validated('due_date'),
             'position' => $this->nextPositionForColumn($column->id),
         ]);
+        $card->load('labels:id,name,color');
 
         return (new CardResource($card))->response()->setStatusCode(201);
     }
@@ -111,6 +118,7 @@ final class CardController extends Controller
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
         $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
+        $card->load('labels:id,name,color');
 
         return (new CardResource($card))->response();
     }
@@ -145,7 +153,9 @@ final class CardController extends Controller
             $card->fill($updates)->save();
         }
 
-        return (new CardResource($card->fresh()))->response();
+        $card->load('labels:id,name,color');
+
+        return (new CardResource($card))->response();
     }
 
     /**

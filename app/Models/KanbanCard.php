@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -80,5 +81,19 @@ class KanbanCard extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(KanbanAttachment::class, 'card_id');
+    }
+
+    /**
+     * Labels applied to this card. The pivot table is `kanban_card_label`;
+     * sync operations are exposed through `PUT /cards/{card}/labels`.
+     * The `CardController` eager-loads this relation via `with('labels:id,name,color')`
+     * on every list/show payload to avoid N+1.
+     *
+     * @return BelongsToMany<KanbanLabel>
+     */
+    public function labels(): BelongsToMany
+    {
+        return $this->belongsToMany(KanbanLabel::class, 'kanban_card_label', 'card_id', 'label_id')
+            ->withTimestamps();
     }
 }
