@@ -33,7 +33,7 @@ jobs:
       #   run: cp -f .env.campobase .env
 
       - name: 📂 Sync files
-        uses: SamKirkland/FTP-Deploy-Action@4.3.5
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: ftp.llamadev.cl
           username: gh-devmanager-api@llamadev.cl
