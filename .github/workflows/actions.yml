@@ -4,45 +4,45 @@ on:
       - main
 
 name: 🚀 Deploy api on push (Main)
-# jobs:
-#   deploy:
-#     name: 🎉 Deploy
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: 🚚 Get latest code
-#         uses: actions/checkout@v3
+jobs:
+  deploy:
+    name: 🎉 Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🚚 Get latest code
+        uses: actions/checkout@v3
 
-#       - name: Setup PHP
-#         uses: shivammathur/setup-php@v2
-#         with:
-#           php-version: 8.3
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
 
-#       - name: Cache Composer packages
-#         id: composer-cache
-#         uses: actions/cache@v3
-#         with:
-#           path: vendor
-#           key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
-#           restore-keys: |
-#             ${{ runner.os }}-php-
+      - name: Cache Composer packages
+        id: composer-cache
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
 
-#       - name: 🔨 Install dependencies
-#         run: composer install --prefer-dist --no-progress
+      - name: 🔨 Install dependencies
+        run: composer install --prefer-dist --no-progress
 
-#       - name: 🔑 Set .env campobase
-#         run: cp -f .env.campobase .env
+      # - name: 🔑 Set .env campobase
+      #   run: cp -f .env.campobase .env
 
-#       - name: 📂 Sync files campobase
-#         uses: SamKirkland/FTP-Deploy-Action@4.3.0
-#         with:
-#           server: ftp.hostalcampobase.cl
-#           username: gh-cashflow-api@hostalcampobase.cl
-#           password: ${{ secrets.ftp_password }}
-#           exclude: |
-#             **/.git*
-#             **/.git*/**
-#             **/storage/**
-#             **/public/**
+      - name: 📂 Sync files
+        uses: SamKirkland/FTP-Deploy-Action@4.3.0
+        with:
+          server: ftp.llamadev.cl
+          username: gh-devmanager-api@llamadev.cl
+          password: ${{ secrets.ftp_password }}
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/storage/**
+            **/public/**
 
       # - name: 🔑 Set .env mamatierra
       #   run: cp -f .env.mamatierra .env
