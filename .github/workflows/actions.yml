@@ -29,6 +29,11 @@ jobs:
       - name: 🔨 Install dependencies
         run: composer install --prefer-dist --no-progress --no-interaction
 
+      - name: 🔐 Create .env
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+
       - name: ✅ Run tests
         run: composer test
 
