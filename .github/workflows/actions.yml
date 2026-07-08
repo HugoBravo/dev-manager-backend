@@ -44,35 +44,4 @@ jobs:
             **/storage/**
             **/public/**
 
-      # - name: 🔑 Set .env mamatierra
-      #   run: cp -f .env.mamatierra .env
-
-      # - name: 📂 Sync files mamatierra
-      #   uses: SamKirkland/FTP-Deploy-Action@4.3.0
-      #   with:
-      #     server: ftp.hostalmamatierra.cl
-      #     username: gh-cashflow-api@hostalmamatierra.cl
-      #     password: ${{ secrets.ftp_password_mamatierra }}
-      #     exclude: |
-      #       **/.git*
-      #       **/.git*/**
-      #       **/storage/**
-      #       **/public/**
-
-      # - name: 🔑 Set .env belen
-      #   run: cp -f .env.belen .env
-
-      # - name: 📂 Sync files belen
-      #   uses: SamKirkland/FTP-Deploy-Action@4.3.0
-      #   with:
-      #     server: ftp.hostalbelen.cl
-      #     username: gh-cashflow-api@hostalbelen.cl
-      #     password: ${{ secrets.ftp_password_belen }}
-      #     exclude: |
-      #       **/.git*
-      #       **/.git*/**
-      #       **/storage/**
-      #       **/public/**
-      #       .env.campobase
-      #       .env.mamatierra
-      #       .env.belen
+   
