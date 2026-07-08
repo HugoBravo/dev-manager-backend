@@ -45,7 +45,7 @@ final class CommentController extends Controller
      * `?parent_id=` filter (returns the children of a specific parent root).
      * R1: archived project → empty list unless `?include_archived=1`.
      */
-    public function index(Request $request, int $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function index(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -76,13 +76,13 @@ final class CommentController extends Controller
      * Show a single comment. Cross-owner -> 404.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function show(Request $request, int $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanComment $comment): JsonResponse
+    public function show(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanComment $comment): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         // The Route::bind('comment') closure already verified ownership through
         // the card chain. We additionally ensure the comment belongs to the
@@ -99,13 +99,13 @@ final class CommentController extends Controller
      * cross-author parent_id. The author is the authenticated user.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function store(StoreCommentRequest $request, int $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function store(StoreCommentRequest $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
         $this->authorize('create', KanbanComment::class);
 
         $payload = [
@@ -125,13 +125,13 @@ final class CommentController extends Controller
      * Kanban\UpdateCommentRequest::withValidator() and the policy respectively.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function update(UpdateCommentRequest $request, int $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanComment $comment): JsonResponse
+    public function update(UpdateCommentRequest $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanComment $comment): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         if ($comment->card_id !== $card->id) {
             abort(404);
@@ -154,13 +154,13 @@ final class CommentController extends Controller
      * returns 422 instead of silently succeeding.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function destroy(Request $request, int $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanComment $comment): Response
+    public function destroy(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanComment $comment): Response
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         if ($comment->card_id !== $card->id) {
             abort(404);

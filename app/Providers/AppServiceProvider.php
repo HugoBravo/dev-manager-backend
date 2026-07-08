@@ -57,6 +57,37 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(KanbanComment::class, KanbanCommentPolicy::class);
         Gate::policy(KanbanAttachment::class, KanbanAttachmentPolicy::class);
 
+        // Ownership-scoped route binding for `{project}`. URI segments may
+        // arrive as either a numeric id (legacy callers / tests) or a slug
+        // (shareable URLs from the client). The closure resolves by id when
+        // the value is numeric and by slug otherwise, then scopes by
+        // owner_id so cross-owner access renders as 404 (ModelNotFoundException)
+        // — matching the 404-not-403 contract documented in design §7.
+        // Archived_at is intentionally NOT checked here; the controller layer
+        // (KanbanRequestScope trait) owns that filter.
+        Route::bind('project', function (string $value): Project {
+            $userId = request()->user()?->id;
+            if ($userId === null) {
+                throw (new ModelNotFoundException)->setModel(Project::class, [$value]);
+            }
+
+            $query = Project::query()->where('owner_id', $userId);
+
+            if (is_numeric($value)) {
+                $query->whereKey((int) $value);
+            } else {
+                $query->where('slug', $value);
+            }
+
+            $project = $query->first();
+
+            if ($project === null) {
+                throw (new ModelNotFoundException)->setModel(Project::class, [$value]);
+            }
+
+            return $project;
+        });
+
         // Owner-scoped chokepoint (Batch 7 PHPDoc note):
         //
         // Every `Route::bind(...)` closure below walks the ownership chain

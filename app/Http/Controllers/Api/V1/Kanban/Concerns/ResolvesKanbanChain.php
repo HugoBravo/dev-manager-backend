@@ -34,19 +34,19 @@ trait ResolvesKanbanChain
 
     /**
      * Resolve the project owned by the authenticated user; 404 otherwise.
+     * The `Route::bind('project', ...)` closure in AppServiceProvider already
+     * filters by owner_id before the controller runs, so the bound instance
+     * is guaranteed to belong to the authenticated user. We re-verify
+     * owner_id here as belt-and-braces so the 404-not-403 contract
+     * (design §7) survives any future loosening of the binding closure.
      */
-    private function resolveOwnedProject(Request $request, int $projectId): Project
+    private function resolveOwnedProject(Request $request, Project $project): Project
     {
-        $model = Project::query()
-            ->where('owner_id', $request->user()->id)
-            ->whereKey($projectId)
-            ->first();
-
-        if ($model === null) {
-            throw (new ModelNotFoundException)->setModel(Project::class, [$projectId]);
+        if ($project->owner_id !== $request->user()->id) {
+            throw (new ModelNotFoundException)->setModel(Project::class, [$project->getRouteKey()]);
         }
 
-        return $model;
+        return $project;
     }
 
     private function ensureBoardBelongsToProject(KanbanBoard $board, Project $project): void

@@ -32,13 +32,13 @@ final class CardArchiveController extends Controller
     /**
      * Archive a card (sets `archived_at` to now).
      */
-    public function archive(Request $request, int $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function archive(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
         $this->authorize('archive', $card);
 
         if ($card->archived_at === null) {
@@ -52,13 +52,13 @@ final class CardArchiveController extends Controller
     /**
      * Restore an archived card (clears `archived_at`).
      */
-    public function restore(Request $request, int $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function restore(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
         $this->authorize('restore', $card);
 
         if ($card->archived_at !== null) {

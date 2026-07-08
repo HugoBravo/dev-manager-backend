@@ -51,7 +51,7 @@ final class ColumnController extends Controller
      * List columns of a board (paginated 25/page; archived columns hidden).
      * R1: archived project → empty list unless `?include_archived=1`.
      */
-    public function index(Request $request, int $project, KanbanBoard $board): JsonResponse
+    public function index(Request $request, Project $project, KanbanBoard $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -76,11 +76,11 @@ final class ColumnController extends Controller
      * `after()` factory — appending to the rightmost sibling under the
      * board. R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function store(StoreColumnRequest $request, int $project, KanbanBoard $board): JsonResponse
+    public function store(StoreColumnRequest $request, Project $project, KanbanBoard $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         $nextPosition = $this->nextPositionForBoard($board->id);
 
@@ -97,12 +97,12 @@ final class ColumnController extends Controller
      * Show one column (cross-owner -> 404 via binding closure).
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function show(Request $request, int $project, KanbanBoard $board, KanbanColumn $column): JsonResponse
+    public function show(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         return (new ColumnResource($column))->response();
     }
@@ -111,12 +111,12 @@ final class ColumnController extends Controller
      * Rename or archive a column (cross-owner -> 404 via binding closure).
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function update(UpdateColumnRequest $request, int $project, KanbanBoard $board, KanbanColumn $column): JsonResponse
+    public function update(UpdateColumnRequest $request, Project $project, KanbanBoard $board, KanbanColumn $column): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
         $this->authorize('update', $column);
 
         $column->fill($request->validated())->save();
@@ -129,12 +129,12 @@ final class ColumnController extends Controller
      * A column with cards under it returns 409 via Kanban\ColumnHasContentsException.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function destroy(Request $request, int $project, KanbanBoard $board, KanbanColumn $column): Response
+    public function destroy(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column): Response
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         // Card-existence check via the real `cards()` relationship (ships
         // in Batch 4). The Batch 3 `cardsTableExists()` schema-cache memo
@@ -162,11 +162,11 @@ final class ColumnController extends Controller
      * via a stable indexed sequence so re-fetch yields the same order.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function reorder(ReorderColumnsRequest $request, int $project, KanbanBoard $board): JsonResponse
+    public function reorder(ReorderColumnsRequest $request, Project $project, KanbanBoard $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         $orderedIds = $request->orderedIds();
 
@@ -197,14 +197,14 @@ final class ColumnController extends Controller
      */
     public function move(
         MoveColumnRequest $request,
-        int $project,
+        Project $project,
         KanbanBoard $board,
         KanbanColumn $column,
     ): JsonResponse {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         $targetBoardId = $request->targetBoardId();
         if ($targetBoardId === $board->id) {

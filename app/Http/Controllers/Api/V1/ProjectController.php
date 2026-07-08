@@ -58,37 +58,37 @@ final class ProjectController extends Controller
      * Archived projects respond 404 by default; pass
      * `?include_archived=1` to view them.
      */
-    public function show(Request $request, int $project): JsonResponse
+    public function show(Request $request, Project $project): JsonResponse
     {
-        $model = $this->resolveOwnedProject($request, $project);
+        $this->resolveOwnedProject($request, $project);
 
-        if ($model->archived_at !== null && ! $request->boolean('include_archived')) {
-            throw (new ModelNotFoundException)->setModel(Project::class, [$project]);
+        if ($project->archived_at !== null && ! $request->boolean('include_archived')) {
+            throw (new ModelNotFoundException)->setModel(Project::class, [$project->getRouteKey()]);
         }
 
-        return (new ProjectResource($model))->response();
+        return (new ProjectResource($project))->response();
     }
 
     /**
      * Update a project. Cross-owner resolves to 404.
      */
-    public function update(UpdateProjectRequest $request, int $project): JsonResponse
+    public function update(UpdateProjectRequest $request, Project $project): JsonResponse
     {
-        $model = $this->resolveOwnedProject($request, $project);
+        $this->resolveOwnedProject($request, $project);
 
-        $model->fill($request->validated())->save();
+        $project->fill($request->validated())->save();
 
-        return (new ProjectResource($model->fresh()))->response();
+        return (new ProjectResource($project->fresh()))->response();
     }
 
     /**
      * Delete a project. Cross-owner resolves to 404.
      */
-    public function destroy(Request $request, int $project): Response
+    public function destroy(Request $request, Project $project): Response
     {
-        $model = $this->resolveOwnedProject($request, $project);
+        $this->resolveOwnedProject($request, $project);
 
-        $model->delete();
+        $project->delete();
 
         return response()->noContent();
     }
@@ -98,26 +98,24 @@ final class ProjectController extends Controller
      * ModelNotFoundException (rendered as 404) for both unknown id AND
      * cross-owner — preventing existence leaks.
      */
-    private function resolveOwnedProject(Request $request, int $projectId): Project
+    private function resolveOwnedProject(Request $request, Project $project): void
     {
-        $model = Project::query()
-            ->where('owner_id', $request->user()->id)
-            ->whereKey($projectId)
-            ->first();
-
-        if ($model === null) {
-            throw (new ModelNotFoundException)->setModel(Project::class, [$projectId]);
+        // Belt-and-braces: the `Route::bind('project', ...)` closure in
+        // AppServiceProvider already filters by owner_id, so by the time we
+        // get here the project is guaranteed to be owned by auth()->user().
+        // We re-check owner_id and re-authorize anyway so the 404-not-403
+        // contract (design §7) survives even if a future refactor drops the
+        // binding closure's ownership scope. Both the owner mismatch and
+        // the policy denial render as ModelNotFound (404) so we never leak
+        // existence to a stranger who guesses a slug or id.
+        if ($project->owner_id !== $request->user()->id) {
+            throw (new ModelNotFoundException)->setModel(Project::class, [$project->getRouteKey()]);
         }
 
-        // Belt-and-braces: even if a future change relaxes the WHERE above, the
-        // gate still denies. Belt-only would still satisfy the tests, but the
-        // 404-not-403 contract (design §7) is enforced here directly.
         try {
-            $this->authorize('view', $model);
+            $this->authorize('view', $project);
         } catch (AuthorizationException) {
-            throw (new ModelNotFoundException)->setModel(Project::class, [$projectId]);
+            throw (new ModelNotFoundException)->setModel(Project::class, [$project->getRouteKey()]);
         }
-
-        return $model;
     }
 }

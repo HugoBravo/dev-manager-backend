@@ -44,7 +44,7 @@ final class BoardController extends Controller
      * R1: when the project itself is archived, the list is empty unless the
      * caller passes `?include_archived=1`.
      */
-    public function index(Request $request, int $project): JsonResponse
+    public function index(Request $request, Project $project): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
 
@@ -67,11 +67,11 @@ final class BoardController extends Controller
     /**
      * Create a board. Position is auto-assigned as a fresh-mid fraction.
      */
-    public function store(StoreBoardRequest $request, int $project): JsonResponse
+    public function store(StoreBoardRequest $request, Project $project): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
 
-        $nextPosition = $this->nextPositionForProject($projectModel->id);
+        $nextPosition = $this->nextPositionForProject($projectModel);
 
         $board = KanbanBoard::query()->create([
             'project_id' => $projectModel->id,
@@ -86,11 +86,11 @@ final class BoardController extends Controller
      * Show one board (cross-owner -> 404 via binding closure).
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
-    public function show(Request $request, int $project, KanbanBoard $board): JsonResponse
+    public function show(Request $request, Project $project, KanbanBoard $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         return (new BoardResource($board))->response();
     }
@@ -99,11 +99,11 @@ final class BoardController extends Controller
      * Rename a board (cross-owner -> 404 via binding closure).
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
-    public function update(UpdateBoardRequest $request, int $project, KanbanBoard $board): JsonResponse
+    public function update(UpdateBoardRequest $request, Project $project, KanbanBoard $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
         $this->authorize('update', $board);
 
         $board->fill($request->validated())->save();
@@ -119,11 +119,11 @@ final class BoardController extends Controller
      * because there's nothing to count — Batch 3 lands the real check.
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
-    public function destroy(Request $request, int $project, KanbanBoard $board): Response
+    public function destroy(Request $request, Project $project, KanbanBoard $board): Response
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         // Column existence check — meaningful only once kanban_columns table
         // exists (Batch 3). On Batch 2 we always return false here so the
@@ -154,11 +154,11 @@ final class BoardController extends Controller
      * the original timestamp. R1: archived project returns 404 unless
      * `?include_archived=1`.
      */
-    public function archive(Request $request, int $project, KanbanBoard $board): JsonResponse
+    public function archive(Request $request, Project $project, KanbanBoard $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
         $this->authorize('archive', $board);
 
         if ($board->archived_at === null) {
@@ -174,10 +174,10 @@ final class BoardController extends Controller
      * positions (`m`, `ma`, `maa`, ...) so the list stays stable on re-fetch.
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
-    public function reorder(ReorderBoardsRequest $request, int $project): JsonResponse
+    public function reorder(ReorderBoardsRequest $request, Project $project): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         $orderedIds = $request->orderedIds();
 
@@ -195,20 +195,19 @@ final class BoardController extends Controller
 
     /**
      * Resolve the project owned by the authenticated user; 404 otherwise.
-     * Mirrors the ProjectController pattern from Batch 1 (consistency).
+     * The `Route::bind('project', ...)` closure in AppServiceProvider already
+     * filters by owner_id, so the bound instance is guaranteed to belong to
+     * the authenticated user. We re-verify owner_id as belt-and-braces so the
+     * 404-not-403 contract (design §7) survives any future change to the
+     * binding closure.
      */
-    private function resolveOwnedProject(Request $request, int $projectId): Project
+    private function resolveOwnedProject(Request $request, Project $project): Project
     {
-        $model = Project::query()
-            ->where('owner_id', $request->user()->id)
-            ->whereKey($projectId)
-            ->first();
-
-        if ($model === null) {
-            throw (new ModelNotFoundException)->setModel(Project::class, [$projectId]);
+        if ($project->owner_id !== $request->user()->id) {
+            throw (new ModelNotFoundException)->setModel(Project::class, [$project->getRouteKey()]);
         }
 
-        return $model;
+        return $project;
     }
 
     /**
@@ -227,10 +226,10 @@ final class BoardController extends Controller
      * existing position + 1 lex-rank increment. Naive; Batch 3 replaces with
      * the `Position` value object's `append()`.
      */
-    private function nextPositionForProject(int $projectId): string
+    private function nextPositionForProject(Project $project): string
     {
         $largest = KanbanBoard::query()
-            ->where('project_id', $projectId)
+            ->where('project_id', $project->id)
             ->orderByDesc('position')
             ->value('position');
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Kanban;
 
 use App\Models\KanbanBoard;
+use App\Models\Project;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -33,7 +34,8 @@ final class ReorderBoardsRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $v): void {
-            $projectId = $this->route('project');
+            $project = $this->route('project');
+            $projectId = $project instanceof Project ? $project->getKey() : (int) $project;
             $ids = (array) $this->input('ordered_ids', []);
 
             if ($ids === []) {

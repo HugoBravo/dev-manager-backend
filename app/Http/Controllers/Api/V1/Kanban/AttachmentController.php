@@ -51,7 +51,7 @@ final class AttachmentController extends Controller
      * List attachments of a card. Pagination page[size]=25 per the spec.
      * R1: archived project → empty list unless `?include_archived=1`.
      */
-    public function index(Request $request, int $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function index(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -88,13 +88,13 @@ final class AttachmentController extends Controller
      *   6. 201 + `Kanban\AttachmentResource`.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function store(StoreAttachmentRequest $request, int $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function store(StoreAttachmentRequest $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
         $this->authorize('create', KanbanAttachment::class);
 
         $file = $request->file('file');
@@ -140,13 +140,13 @@ final class AttachmentController extends Controller
      * the response is atomic at the HTTP boundary.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function destroy(Request $request, int $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanAttachment $attachment): Response
+    public function destroy(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanAttachment $attachment): Response
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         // Cross-card guard — the binding closure enforces ownership but
         // not URL-vs-relationship consistency.

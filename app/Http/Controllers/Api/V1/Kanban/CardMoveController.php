@@ -41,7 +41,7 @@ final class CardMoveController extends Controller
      */
     public function move(
         MoveCardRequest $request,
-        int $project,
+        Project $project,
         KanbanBoard $board,
         KanbanColumn $column,
         KanbanCard $card,
@@ -50,7 +50,7 @@ final class CardMoveController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
-        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
         $this->authorize('move', $card);
 
         $targetColumnId = $request->targetColumnId();

@@ -18,8 +18,12 @@ final class UpdateProjectRequest extends FormRequest
      */
     public function rules(): array
     {
-        // `unique` must ignore the row currently being patched.
-        $projectId = (int) $this->route('project');
+        // `unique` must ignore the row currently being patched. The route
+        // resolves `{project}` to a `Project` model via AppServiceProvider's
+        // ownership-scoped Route::bind('project', ...) closure, so we pull
+        // the primary key directly off the model — works for both id and slug
+        // URI variants.
+        $projectId = (int) $this->route('project')->getKey();
 
         return [
             'name' => ['sometimes', 'required', 'string', 'min:1', 'max:100'],
