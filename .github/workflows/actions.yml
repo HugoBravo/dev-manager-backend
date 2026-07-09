@@ -63,8 +63,8 @@ jobs:
       - name: 🔨 Install dependencies
         run: composer install --prefer-dist --no-progress
 
-      # - name: 🔑 Set .env llamadev
-      #   run: cp -f .env.llamadev .env
+      - name: 🔑 Set .env llamadev
+        run: cp -f .env.llamadev .env
 
       - name: 📂 Sync files
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
