@@ -119,4 +119,32 @@ PGPASSWORD="${DB_PASSWORD}" "${PG_DUMP}" \
   --format=plain \
   --file="${OUTPUT_FILE}"
 
+# ---------------------------------------------------------------------------
+# Strip ownership statements the target user cannot run.
+#
+# The target server is a managed PG 10.x (cPanel/pgAdmin) where the application
+# role is NOT the owner of the `public` schema, the `plpgsql` extension, or any
+# database-level object. pg_dump with --clean --if-exists --no-owner still emits:
+#
+#   - DROP / CREATE / COMMENT on the plpgsql extension       -> "must be owner
+#                                                              of extension
+#                                                              plpgsql"
+#   - DROP / CREATE / ALTER SCHEMA public OWNER TO ...      -> "must be owner
+#                                                              of schema public"
+#   - COMMENT ON SCHEMA public IS ...                       -> same
+#
+# plpgsql and the `public` schema are preinstalled in every PG cluster, so we
+# drop those lines in-place with sed. The diff is tiny and idempotent.
+# ---------------------------------------------------------------------------
+sed -i.bak \
+  -e '/^DROP EXTENSION IF EXISTS plpgsql;$/d' \
+  -e '/^CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;$/d' \
+  -e '/^COMMENT ON EXTENSION plpgsql IS /d' \
+  -e '/^DROP SCHEMA IF EXISTS public;$/d' \
+  -e '/^CREATE SCHEMA public;$/d' \
+  -e '/^ALTER SCHEMA public OWNER TO /d' \
+  -e '/^COMMENT ON SCHEMA public IS /d' \
+  "${OUTPUT_FILE}"
+rm -f "${OUTPUT_FILE}.bak"
+
 echo "==> Done. $(du -h "${OUTPUT_FILE}" | cut -f1) at ${OUTPUT_FILE}"
