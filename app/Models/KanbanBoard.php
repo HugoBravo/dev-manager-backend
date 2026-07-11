@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -27,6 +28,8 @@ class KanbanBoard extends Model
 {
     /** @use HasFactory<BoardFactory> */
     use HasFactory;
+
+    use SoftDeletes;
 
     protected $table = 'kanban_boards';
 
