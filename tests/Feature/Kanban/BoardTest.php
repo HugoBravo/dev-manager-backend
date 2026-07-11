@@ -461,3 +461,59 @@ it('caps board position strings at 1024 bytes', function (): void {
 
     expect(strlen($board->position))->toBeLessThanOrEqual(1024);
 });
+
+it('rejects 422 name_taken on case-insensitive duplicate create', function (): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+
+    // "Sprint 1" with intentional whitespace padding inside the name.
+    $this->actingAs($owner, 'sanctum')
+        ->postJson("/api/v1/projects/{$project->id}/kanban/boards", [
+            'name' => 'Sprint 1',
+        ])
+        ->assertCreated();
+
+    $response = $this->actingAs($owner, 'sanctum')
+        ->postJson("/api/v1/projects/{$project->id}/kanban/boards", [
+            'name' => 'sprint  1  ',
+        ])
+        ->assertStatus(422);
+
+    expect($response->json('code'))->toBe('name_taken');
+});
+
+it('rejects 422 name_taken on rename to existing name (case-insensitive)', function (): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+    $b1 = KanbanBoard::factory()->for($project, 'project')->create(['name' => 'Sprint 1']);
+    KanbanBoard::factory()->for($project, 'project')->create(['name' => 'Sprint 2']);
+
+    $response = $this->actingAs($owner, 'sanctum')
+        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$b1->id}", [
+            'name' => 'sprint 2',
+        ])
+        ->assertStatus(422);
+
+    expect($response->json('code'))->toBe('name_taken');
+});
+
+it('allows recycling a name from a trashed board', function (): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+
+    $first = $this->actingAs($owner, 'sanctum')
+        ->postJson("/api/v1/projects/{$project->id}/kanban/boards", ['name' => 'Sprint 1'])
+        ->assertCreated();
+    $firstId = $first->json('data.id');
+
+    $this->actingAs($owner, 'sanctum')
+        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$firstId}")
+        ->assertNoContent();
+
+    // After the row is soft-deleted, recreating with the same name must succeed.
+    $second = $this->actingAs($owner, 'sanctum')
+        ->postJson("/api/v1/projects/{$project->id}/kanban/boards", ['name' => 'Sprint 1'])
+        ->assertCreated();
+
+    expect($second->json('data.id'))->not->toBe($firstId);
+});
