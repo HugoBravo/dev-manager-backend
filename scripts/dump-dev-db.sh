@@ -13,6 +13,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 BACKUP_DIR="${PROJECT_ROOT}/database/backups/dev"
 ENV_FILE="${PROJECT_ROOT}/.env"
+DUMP_TARGET_ROLE="${DUMP_TARGET_ROLE:-}"
 
 # ---------------------------------------------------------------------------
 # Locate pg_dump. MacPorts installs it under /opt/local/lib/postgresql<ver>/bin
@@ -120,6 +121,37 @@ PGPASSWORD="${DB_PASSWORD}" "${PG_DUMP}" \
   --file="${OUTPUT_FILE}"
 
 # ---------------------------------------------------------------------------
+# Optionally append a post-restore permissions block for production imports.
+#
+# This keeps the workflow "dump from dev, upload plain SQL to prod" while also
+# fixing the Sanctum sequence issue after restore. The restore role must be
+# able to execute GRANT/ALTER DEFAULT PRIVILEGES on objects it owns.
+#
+# Set DUMP_TARGET_ROLE to the production app role when generating a file for
+# prod. Example:
+#   DUMP_TARGET_ROLE=llamadev_devmanageruser ./scripts/dump-dev-db.sh
+# ---------------------------------------------------------------------------
+if [[ -n "${DUMP_TARGET_ROLE}" ]]; then
+  case "${DUMP_TARGET_ROLE}" in
+    *[!A-Za-z0-9_]*|'' )
+      echo "ERROR: DUMP_TARGET_ROLE must be a simple SQL role name (letters, numbers, underscore)." >&2
+      exit 1
+      ;;
+  esac
+
+  cat <<SQL >> "${OUTPUT_FILE}"
+
+-- -------------------------------------------------------------------------
+-- Post-restore privileges for Laravel Sanctum.
+-- Keep this block after the dump so imported sequences remain usable by the
+-- production application role.
+-- -------------------------------------------------------------------------
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${DUMP_TARGET_ROLE};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ${DUMP_TARGET_ROLE};
+SQL
+fi
+
+# ---------------------------------------------------------------------------
 # Strip ownership statements the target user cannot run.
 #
 # The target server is a managed PG 10.x (cPanel/pgAdmin) where the application
@@ -137,6 +169,9 @@ PGPASSWORD="${DB_PASSWORD}" "${PG_DUMP}" \
 # drop those lines in-place with sed. The diff is tiny and idempotent.
 # ---------------------------------------------------------------------------
 sed -i.bak \
+  -e '/^\\restrict /d' \
+  -e '/^\\unrestrict /d' \
+  -e '/^SET transaction_timeout = /d' \
   -e '/^DROP EXTENSION IF EXISTS plpgsql;$/d' \
   -e '/^CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;$/d' \
   -e '/^COMMENT ON EXTENSION plpgsql IS /d' \
