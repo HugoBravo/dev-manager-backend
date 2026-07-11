@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\Kanban\AttachmentController;
+use App\Http\Controllers\Api\V1\Kanban\BoardBulkOperationsController;
 use App\Http\Controllers\Api\V1\Kanban\BoardController;
 use App\Http\Controllers\Api\V1\Kanban\CardArchiveController;
 use App\Http\Controllers\Api\V1\Kanban\CardController;
@@ -65,6 +66,18 @@ Route::middleware(['auth:sanctum', 'throttle:api'])
 
             Route::post('boards/{board}/archive', [BoardController::class, 'archive'])
                 ->name('api.v1.projects.kanban.boards.archive');
+
+            // Bulk operations (Batch 1.8). Both literal routes (`bulk-delete`
+            // / `bulk-rename`) MUST be registered BEFORE the apiResource
+            // `{board}` wildcard or Laravel would resolve the literal as a
+            // board id and 404. They live at the apiResource's level
+            // because they operate across multiple boards (no single
+            // {board} binding).
+            Route::post('boards/bulk-delete', [BoardBulkOperationsController::class, 'bulkDelete'])
+                ->name('api.v1.projects.kanban.boards.bulk-delete');
+
+            Route::post('boards/bulk-rename', [BoardBulkOperationsController::class, 'bulkRename'])
+                ->name('api.v1.projects.kanban.boards.bulk-rename');
 
             // Clone endpoint (Batch 1.7). Same routing concern as trash:
             // the literal path is OK here because no namespace conflict at
