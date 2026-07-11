@@ -9,11 +9,13 @@ use App\Exceptions\Kanban\BoardNotTrashedException;
 use App\Exceptions\Kanban\PositionExhaustedException;
 use App\Http\Controllers\Api\V1\Kanban\Concerns\KanbanRequestScope;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Kanban\CloneBoardRequest;
 use App\Http\Requests\Kanban\ReorderBoardsRequest;
 use App\Http\Requests\Kanban\StoreBoardRequest;
 use App\Http\Requests\Kanban\UpdateBoardRequest;
 use App\Http\Resources\Kanban\BoardResource;
 use App\Models\KanbanBoard;
+use App\Models\KanbanColumn;
 use App\Models\Project;
 use App\Services\Kanban\BoardAuditLogger;
 use App\ValueObjects\Kanban\Position;
@@ -195,6 +197,100 @@ final class BoardController extends Controller
         }
 
         return (new BoardResource($board->fresh()))->response();
+    }
+
+    /**
+     * Clone a board: produce a new board in the same project with the same
+     * columns (and zero cards — the cards table ships in Batch 4). Name
+     * defaults to "{original} (Copy)" with a "(Copy N)" suffix on collision.
+     * The source board is left untouched. A trashed source returns 404 (the
+     * default `{board}` binding closure filters soft-deleted rows).
+     */
+    public function clone(CloneBoardRequest $request, Project $project, KanbanBoard $board): JsonResponse
+    {
+        $projectModel = $this->resolveOwnedProject($request, $project);
+        $this->ensureBoardBelongsToProject($board, $projectModel);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
+        $this->authorize('clone', $board);
+
+        $sourceName = $board->name;
+        $desiredName = trim((string) $request->input('name', ''));
+        $finalName = $desiredName !== '' ? $desiredName : "{$sourceName} (Copy)";
+        $finalName = $this->resolveCloneNameCollision($projectModel, $finalName);
+
+        $clone = DB::transaction(function () use ($projectModel, $board, $finalName): KanbanBoard {
+            $position = $this->nextPositionForProject($projectModel);
+
+            $new = KanbanBoard::query()->create([
+                'project_id' => $projectModel->id,
+                'name' => $finalName,
+                'position' => $position,
+            ]);
+
+            // Copy columns, ordered by their existing position so the
+            // resulting board preserves the column flow. Cards are NOT
+            // copied — Batch 4 will introduce the cards relation and the
+            // clone endpoint will gain a `with_cards: true` opt-in.
+            $sourceColumns = KanbanColumn::query()
+                ->where('board_id', $board->id)
+                ->orderBy('position')
+                ->orderBy('id')
+                ->get();
+
+            foreach ($sourceColumns as $column) {
+                KanbanColumn::query()->create([
+                    'board_id' => $new->id,
+                    'name' => $column->name,
+                    'position' => $column->position,
+                    'archived_at' => null,
+                ]);
+            }
+
+            return $new;
+        });
+
+        app(BoardAuditLogger::class)->record($clone, 'cloned', [
+            'source_board_id' => $board->id,
+            'new_board_id' => $clone->id,
+            'columns_cloned' => KanbanColumn::query()->where('board_id', $clone->id)->count(),
+        ]);
+
+        return (new BoardResource($clone->fresh()))->response()->setStatusCode(201);
+    }
+
+    /**
+     * Append "(Copy N)" until the name is unique in the project (active
+     * rows only). The starting "$candidate" is tried as-is first.
+     */
+    private function resolveCloneNameCollision(Project $project, string $candidate): string
+    {
+        $exists = fn (string $name): bool => KanbanBoard::query()
+            ->where('project_id', $project->id)
+            ->where('name', $name)
+            ->whereNull('deleted_at')
+            ->exists();
+
+        if (! $exists($candidate)) {
+            return $candidate;
+        }
+
+        // Compute the base name (strip a trailing " (Copy)" or "(Copy N)"
+        // so the appended suffix does not compound from a previous copy).
+        $base = preg_replace('/ \(Copy(?: \d+)?\)$/', '', $candidate) ?? $candidate;
+
+        $suffix = 2;
+        while ($suffix < 1000) {
+            $next = "{$base} (Copy {$suffix})";
+
+            if (! $exists($next)) {
+                return $next;
+            }
+            $suffix++;
+        }
+
+        // Hard fallback after 1000 collisions — matches the spirit of the
+        // unbounded-name policy without unbounded retries.
+        return $candidate.' ('.now()->timestamp.')';
     }
 
     /**

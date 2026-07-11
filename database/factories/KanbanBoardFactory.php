@@ -34,7 +34,10 @@ class KanbanBoardFactory extends Factory
 
         return [
             'project_id' => Project::factory(),
-            'name' => fake()->words(2, true),
+            // Unique-per-factory-call name so the Batch 1.5 case-insensitive
+            // unique index `(project_id, LOWER(name)) WHERE deleted_at IS NULL`
+            // does not fire spuriously under test seeding.
+            'name' => 'Board '.uniqid('b'),
             'position' => 'a'.$lex,
             'archived_at' => null,
         ];

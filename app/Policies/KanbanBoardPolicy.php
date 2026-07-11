@@ -75,6 +75,16 @@ final class KanbanBoardPolicy
     }
 
     /**
+     * Cloning a board — same ownership as view. The controller additionally
+     * rejects clones of soft-deleted boards (404) and applies the
+     * (Copy)/(Copy N) suffix convention for the resulting name.
+     */
+    public function clone(User $user, KanbanBoard $board): bool
+    {
+        return $user->can('view', $board->project);
+    }
+
+    /**
      * Listing trashed boards is a project-scoped read. We require a project
      * scope (passed via `KanbanBoardPolicy::viewTrashed` -> `ProjectPolicy::view`),
      * not a board instance, because trashed listing is invoked without a

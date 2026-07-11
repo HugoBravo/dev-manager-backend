@@ -66,6 +66,13 @@ Route::middleware(['auth:sanctum', 'throttle:api'])
             Route::post('boards/{board}/archive', [BoardController::class, 'archive'])
                 ->name('api.v1.projects.kanban.boards.archive');
 
+            // Clone endpoint (Batch 1.7). Same routing concern as trash:
+            // the literal path is OK here because no namespace conflict at
+            // this exact level; the source board is bound by the default
+            // `{board}` closure.
+            Route::post('boards/{board}/clone', [BoardController::class, 'clone'])
+                ->name('api.v1.projects.kanban.boards.clone');
+
             // Column lifecycle. The reorder + {column}/move routes are listed
             // BEFORE the {column} wildcard so /reorder and /move do not get
             // captured by it. apiResource covers the 5 standard REST verbs.
