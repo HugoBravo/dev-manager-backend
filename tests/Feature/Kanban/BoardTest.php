@@ -6,6 +6,7 @@ use App\Models\KanbanBoard;
 use App\Models\Project;
 use App\Models\User;
 use App\Policies\KanbanBoardPolicy;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 beforeEach(function (): void {
@@ -318,9 +319,16 @@ it('archives a board for the project owner', function (): void {
     expect($archivedAt)->not->toBeNull();
 
     expect($board->fresh()->archived_at)->not->toBeNull();
+
+    // Audit row recorded with the actor + ISO archived_at timestamp.
+    $this->assertDatabaseHas('board_audit_logs', [
+        'board_id' => $board->id,
+        'actor_user_id' => $owner->id,
+        'action' => 'archived',
+    ]);
 });
 
-it('archive is idempotent (a second archive call does not flip the timestamp back)', function (): void {
+it('archive is a toggle: a second archive call on an already-archived board clears archived_at and records `unarchived`', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
     $board = KanbanBoard::factory()->for($project, 'project')->create();
@@ -329,20 +337,23 @@ it('archive is idempotent (a second archive call does not flip the timestamp bac
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/archive")
         ->assertOk();
 
-    $firstArchivedAt = $board->fresh()->archived_at;
-    expect($firstArchivedAt)->not->toBeNull();
-
-    // Sleep one second so a fresh `now()` would have a different value if the
-    // controller were re-stamping.
-    sleep(1);
+    expect($board->fresh()->archived_at)->not->toBeNull();
 
     $this->actingAs($owner, 'sanctum')
         ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/archive")
         ->assertOk();
 
-    // Compare the two timestamps as Carbon instances via equalTo() on either side.
-    $secondArchivedAt = $board->fresh()->archived_at;
-    expect($secondArchivedAt->equalTo($firstArchivedAt))->toBeTrue();
+    // Toggle semantic: archive twice → unarchived.
+    expect($board->fresh()->archived_at)->toBeNull();
+
+    $this->assertDatabaseHas('board_audit_logs', [
+        'board_id' => $board->id,
+        'action' => 'archived',
+    ]);
+    $this->assertDatabaseHas('board_audit_logs', [
+        'board_id' => $board->id,
+        'action' => 'unarchived',
+    ]);
 });
 
 it('returns 404 when a non-owner archives a board', function (): void {
@@ -383,6 +394,19 @@ it('reorders boards and persists the new ordering on a second fetch', function (
         ->all();
 
     expect($ids)->toBe([$b3->id, $b1->id, $b2->id]);
+
+    // Audit hook: one `reordered` row per board with from/to position in payload.
+    foreach ([$b3->id, $b1->id, $b2->id] as $boardId) {
+        $row = DB::table('board_audit_logs')
+            ->where('board_id', $boardId)
+            ->where('action', 'reordered')
+            ->first();
+
+        expect($row)->not->toBeNull();
+        $payload = json_decode($row->payload, true);
+        expect($payload)->toBeArray()
+            ->and($payload)->toHaveKeys(['from_position', 'to_position']);
+    }
 });
 
 it('returns 404 when a non-owner reorders boards', function (): void {

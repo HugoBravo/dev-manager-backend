@@ -180,9 +180,13 @@ final class BoardController extends Controller
     }
 
     /**
-     * Archive a board (sets archived_at). Idempotent: a second call keeps
-     * the original timestamp. R1: archived project returns 404 unless
-     * `?include_archived=1`.
+     * Toggle a board's `archived_at`. The endpoint is a TOGGLE — the first
+     * call archives (sets `archived_at = now()`), the next call unarchives
+     * (clears `archived_at = null`). The audit row records the action as
+     * either `archived` or `unarchived` so the audit panel can branch on
+     * intent rather than timestamp deltas.
+     *
+     * R1: archived project returns 404 unless `?include_archived=1`.
      */
     public function archive(Request $request, Project $project, KanbanBoard $board): JsonResponse
     {
@@ -191,10 +195,13 @@ final class BoardController extends Controller
         $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
         $this->authorize('archive', $board);
 
-        if ($board->archived_at === null) {
-            $board->archived_at = now();
-            $board->save();
-        }
+        $action = $board->archived_at === null ? 'archived' : 'unarchived';
+        $board->archived_at = $board->archived_at === null ? now() : null;
+        $board->save();
+
+        app(BoardAuditLogger::class)->record($board, $action, [
+            'archived_at' => $board->archived_at?->toIso8601String(),
+        ]);
 
         return (new BoardResource($board->fresh()))->response();
     }
@@ -296,6 +303,10 @@ final class BoardController extends Controller
     /**
      * Reorder boards by id array. Persists monotonically-increasing
      * positions (`m`, `ma`, `maa`, ...) so the list stays stable on re-fetch.
+     * Each board records an audit row with `from_position` (the previous
+     * `position` string) and `to_position` (the freshly-assigned indexed
+     * string) so the audit panel can render the diff.
+     *
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
     public function reorder(ReorderBoardsRequest $request, Project $project): JsonResponse
@@ -305,12 +316,31 @@ final class BoardController extends Controller
 
         $orderedIds = $request->orderedIds();
 
-        DB::transaction(function () use ($orderedIds, $projectModel): void {
+        $logger = app(BoardAuditLogger::class);
+
+        DB::transaction(function () use ($orderedIds, $projectModel, $logger): void {
+            // Read current positions BEFORE the update so the audit payload
+            // can record `from_position` accurately. Limited to the ids in
+            // the request to keep the query scope tight.
+            $current = KanbanBoard::query()
+                ->whereIn('id', $orderedIds)
+                ->where('project_id', $projectModel->id)
+                ->pluck('position', 'id');
+
             foreach ($orderedIds as $index => $boardId) {
+                $from = (string) ($current[$boardId] ?? '');
+                $to = $this->indexedPosition($index);
+
                 KanbanBoard::query()
                     ->whereKey($boardId)
                     ->where('project_id', $projectModel->id)
-                    ->update(['position' => $this->indexedPosition($index)]);
+                    ->update(['position' => $to]);
+
+                $logger->record(
+                    KanbanBoard::query()->whereKey($boardId)->firstOrFail(),
+                    'reordered',
+                    ['from_position' => $from, 'to_position' => $to],
+                );
             }
         });
 
