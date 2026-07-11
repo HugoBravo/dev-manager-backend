@@ -61,4 +61,27 @@ final class KanbanBoardPolicy
     {
         return $user->can('view', $board->project);
     }
+
+    /**
+     * Restoring a soft-deleted board — same ownership as view.
+     * The controller layer additionally checks that `deleted_at` IS NOT NULL
+     * before invoking the restore (and throws BoardNotTrashedException->422
+     * if the board is still active). The policy is the ownership chokepoint;
+     * the controller is the lifecycle chokepoint.
+     */
+    public function restore(User $user, KanbanBoard $board): bool
+    {
+        return $user->can('view', $board->project);
+    }
+
+    /**
+     * Listing trashed boards is a project-scoped read. We require a project
+     * scope (passed via `KanbanBoardPolicy::viewTrashed` -> `ProjectPolicy::view`),
+     * not a board instance, because trashed listing is invoked without a
+     * specific board id.
+     */
+    public function viewTrashed(User $user, Project $project): bool
+    {
+        return $user->can('view', $project);
+    }
 }

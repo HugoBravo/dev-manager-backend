@@ -43,6 +43,17 @@ Route::middleware(['auth:sanctum', 'throttle:api'])
             Route::post('boards/reorder', [BoardController::class, 'reorder'])
                 ->name('api.v1.projects.kanban.boards.reorder');
 
+            // Trash + restore endpoints (Batch 1.4). The literal `trashed`
+            // MUST be registered BEFORE the {board} wildcard in apiResource,
+            // otherwise Laravel would match `/boards/trashed` against the
+            // `{board}` binding closure (which looks for `whereKey('trashed')`
+            // and 404s). Same applies to `restore` and `{boardId}` below.
+            Route::get('boards/trashed', [BoardController::class, 'trashed'])
+                ->name('api.v1.projects.kanban.boards.trashed');
+
+            Route::post('boards/{boardId}/restore', [BoardController::class, 'restore'])
+                ->name('api.v1.projects.kanban.boards.restore');
+
             Route::apiResource('boards', BoardController::class)
                 ->names([
                     'index' => 'api.v1.projects.kanban.boards.index',

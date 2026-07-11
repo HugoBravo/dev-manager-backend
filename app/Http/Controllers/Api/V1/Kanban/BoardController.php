@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1\Kanban;
 
 use App\Exceptions\Kanban\BoardHasContentsException;
+use App\Exceptions\Kanban\BoardNotTrashedException;
 use App\Http\Controllers\Api\V1\Kanban\Concerns\KanbanRequestScope;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Kanban\ReorderBoardsRequest;
@@ -13,7 +14,9 @@ use App\Http\Requests\Kanban\UpdateBoardRequest;
 use App\Http\Resources\Kanban\BoardResource;
 use App\Models\KanbanBoard;
 use App\Models\Project;
+use App\Services\Kanban\BoardAuditLogger;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -191,6 +194,67 @@ final class BoardController extends Controller
         });
 
         return response()->json(['data' => ['reordered' => count($orderedIds)]]);
+    }
+
+    /**
+     * Restore a soft-deleted board to the active list. The {board} route
+     * binding closure scopes by ownership AND filters out soft-deleted rows
+     * (the SoftDeletes global scope), so a trashed board id never resolves at
+     * bind time — we look it up manually with the scope dropped, then verify
+     * ownership + lifecycle state. A foreign or non-existent board 404s;
+     * an already-active board returns 422 BoardNotTrashedException.
+     * R1: archived project returns 404 unless `?include_archived=1`.
+     */
+    public function restore(Request $request, Project $project, KanbanBoard $board): JsonResponse
+    {
+        $projectModel = $this->resolveOwnedProject($request, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
+
+        // The bound instance IS the trashed board (binding closure uses
+        // withTrashed so soft-deleted rows resolve). Verify ownership + state.
+        $trashed = KanbanBoard::query()
+            ->withoutGlobalScope(SoftDeletingScope::class)
+            ->whereKey($board->getKey())
+            ->where('project_id', $projectModel->id)
+            ->first();
+
+        if ($trashed === null) {
+            throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$board->getKey()]);
+        }
+
+        if ($trashed->deleted_at === null) {
+            throw new BoardNotTrashedException($trashed);
+        }
+
+        DB::transaction(function () use ($trashed): void {
+            $trashed->deleted_at = null;
+            $trashed->save();
+
+            app(BoardAuditLogger::class)->record($trashed, 'restored', []);
+        });
+
+        return (new BoardResource($trashed->fresh()))->response();
+    }
+
+    /**
+     * List trashed boards for a project, paginated 25/page, ordered newest-first
+     * (deleted_at DESC). The default index excludes trashed rows via the
+     * SoftDeletes global scope — this endpoint drops it for the single query.
+     * R1: archived project returns 404 unless `?include_archived=1`.
+     */
+    public function trashed(Request $request, Project $project): JsonResponse
+    {
+        $projectModel = $this->resolveOwnedProject($request, $project);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
+
+        $boards = KanbanBoard::query()
+            ->withoutGlobalScope(SoftDeletingScope::class)
+            ->where('project_id', $projectModel->id)
+            ->whereNotNull('deleted_at')
+            ->orderByDesc('deleted_at')
+            ->paginate(25);
+
+        return BoardResource::collection($boards)->response();
     }
 
     /**

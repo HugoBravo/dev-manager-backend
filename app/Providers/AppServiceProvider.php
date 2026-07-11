@@ -125,6 +125,11 @@ class AppServiceProvider extends ServiceProvider
         // Column needs board -> project -> owner, so the closure walks
         // through two levels of ownership. Batches 4-6 must follow this
         // exact pattern for `{card}`, `{comment}`, `{attachment}`.
+        //
+        // The default binding uses SoftDeletes' global scope (filters trashed
+        // out), so soft-deleted boards 404 at bind time. The restore endpoint
+        // (Batch 1.4) uses a separate `{boardId}` binding that DOES include
+        // trashed rows via `withTrashed()`, registered below.
         Route::bind('board', function (string $value): KanbanBoard {
             $userId = request()->user()?->id;
             if ($userId === null) {
@@ -132,6 +137,32 @@ class AppServiceProvider extends ServiceProvider
             }
 
             $board = KanbanBoard::query()
+                ->whereHas('project', function ($q) use ($userId): void {
+                    $q->where('owner_id', $userId);
+                })
+                ->whereKey($value)
+                ->first();
+
+            if ($board === null) {
+                throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$value]);
+            }
+
+            return $board;
+        });
+
+        // Trashed-aware variant of the `{board}` binding for the restore
+        // endpoint (`POST /boards/{boardId}/restore`). Resolves a soft-deleted
+        // board id within the ownership chain. The `boardId` parameter NAME
+        // is distinct so Laravel routes are matched against `boardId` rather
+        // than `board`, keeping the default binding unchanged.
+        Route::bind('boardId', function (string $value): KanbanBoard {
+            $userId = request()->user()?->id;
+            if ($userId === null) {
+                throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$value]);
+            }
+
+            $board = KanbanBoard::query()
+                ->withTrashed()
                 ->whereHas('project', function ($q) use ($userId): void {
                     $q->where('owner_id', $userId);
                 })
