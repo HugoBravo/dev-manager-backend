@@ -94,4 +94,16 @@ final class KanbanBoardPolicy
     {
         return $user->can('view', $project);
     }
+
+    /**
+     * Reading the board's audit trail requires the same ownership as the
+     * board itself — `ProjectPolicy::view` is the chokepoint. The route
+     * binding closure already 404s on cross-owner boards; this gate is
+     * belt-and-braces so a future refactor that loosens the binding does
+     * not silently leak the trail.
+     */
+    public function viewAudit(User $user, KanbanBoard $board): bool
+    {
+        return $user->can('view', $board->project);
+    }
 }

@@ -86,6 +86,13 @@ Route::middleware(['auth:sanctum', 'throttle:api'])
             Route::post('boards/{board}/clone', [BoardController::class, 'clone'])
                 ->name('api.v1.projects.kanban.boards.clone');
 
+            // Audit log read (Batch 2.2 — verify phase fix). Registered
+            // BEFORE the {board} wildcard would shadow it (no conflict at
+            // this exact level, but we keep the precedent set by restore /
+            // archive / clone so future refactors are safe).
+            Route::get('boards/{board}/audit', [BoardController::class, 'audit'])
+                ->name('api.v1.projects.kanban.boards.audit');
+
             // Column lifecycle. The reorder + {column}/move routes are listed
             // BEFORE the {column} wildcard so /reorder and /move do not get
             // captured by it. apiResource covers the 5 standard REST verbs.

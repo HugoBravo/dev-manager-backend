@@ -70,6 +70,20 @@ class KanbanBoard extends Model
     }
 
     /**
+     * Append-only audit trail rows for this board. Powers
+     * `GET /api/v1/projects/{project}/kanban/boards/{board}/audit`
+     * (sdd/boards-kanban-crud-full/spec §5). The composite index on
+     * `(board_id, created_at desc)` makes the per-board ordered scan a
+     * single index seek.
+     *
+     * @phpstan-return HasMany<KanbanBoardAuditLog>
+     */
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(KanbanBoardAuditLog::class, 'board_id');
+    }
+
+    /**
      * Whether the underlying `kanban_columns` table exists yet. Used by the
      * controller to gate 409-on-delete until Batch 3 ships. Cheap memoized
      * lookup so we don't pay schema-cache cost on every destroy.

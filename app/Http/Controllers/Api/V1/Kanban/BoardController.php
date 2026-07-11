@@ -13,6 +13,7 @@ use App\Http\Requests\Kanban\CloneBoardRequest;
 use App\Http\Requests\Kanban\ReorderBoardsRequest;
 use App\Http\Requests\Kanban\StoreBoardRequest;
 use App\Http\Requests\Kanban\UpdateBoardRequest;
+use App\Http\Resources\Kanban\BoardAuditLogResource;
 use App\Http\Resources\Kanban\BoardResource;
 use App\Models\KanbanBoard;
 use App\Models\KanbanColumn;
@@ -256,11 +257,19 @@ final class BoardController extends Controller
             return $new;
         });
 
-        app(BoardAuditLogger::class)->record($clone, 'cloned', [
+        // Spec capability `board-audit-log` (sdd/boards-kanban-crud-full/spec §5
+        // "Clone logs both sides"): BOTH boards receive a `cloned` row. The
+        // payload on each side carries both ids so the frontend audit panel
+        // can render the link without an extra request.
+        $clonePayload = [
             'source_board_id' => $board->id,
             'new_board_id' => $clone->id,
             'columns_cloned' => KanbanColumn::query()->where('board_id', $clone->id)->count(),
-        ]);
+        ];
+
+        $logger = app(BoardAuditLogger::class);
+        $logger->record($clone, 'cloned', $clonePayload);
+        $logger->record($board, 'cloned', $clonePayload);
 
         return (new BoardResource($clone->fresh()))->response()->setStatusCode(201);
     }
@@ -406,6 +415,32 @@ final class BoardController extends Controller
             ->paginate(25);
 
         return BoardResource::collection($boards)->response();
+    }
+
+    /**
+     * Paginated audit log for a single board, newest first. The
+     * `BoardAuditLogResource` collection preserves Laravel's standard
+     * `data / links / meta` envelope so the frontend's `listBoardAudit`
+     * helper can use the same pagination decoder it already trusts.
+     *
+     * Authorization (`viewAudit` gate) delegates to the project ownership
+     * chokepoint; cross-owner requests never reach this method because the
+     * `{board}` Route::bind closure throws 404 first.
+     *
+     * R1: archived project returns 404 unless `?include_archived=1`.
+     */
+    public function audit(Request $request, Project $project, KanbanBoard $board): JsonResponse
+    {
+        $projectModel = $this->resolveOwnedProject($request, $project);
+        $this->ensureBoardBelongsToProject($board, $projectModel);
+        $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
+        $this->authorize('viewAudit', $board);
+
+        $logs = $board->auditLogs()
+            ->orderByDesc('created_at')
+            ->paginate(25);
+
+        return BoardAuditLogResource::collection($logs)->response();
     }
 
     /**
