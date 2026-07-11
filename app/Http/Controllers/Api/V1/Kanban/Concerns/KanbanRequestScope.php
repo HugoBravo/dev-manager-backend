@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1\Kanban\Concerns;
 
+use App\Models\Project;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 
@@ -89,5 +90,24 @@ trait KanbanRequestScope
         if ($archivedAt !== null) {
             throw (new ModelNotFoundException)->setModel($projectClass, [$projectId]);
         }
+    }
+
+    /**
+     * Belt-and-braces ownership check after the `Route::bind('project', ...)`
+     * closure has already filtered by `owner_id`. Returns the project
+     * instance unchanged on success; throws `ModelNotFoundException` (404)
+     * if the bound project does not belong to the authenticated user.
+     *
+     * Centralized in this trait (Batch 3 refactor) so every kanban
+     * controller applies the same gate and the cross-owner contract
+     * survives any future change to the binding closure.
+     */
+    protected function resolveOwnedProject(Request $request, Project $project): Project
+    {
+        if ($project->owner_id !== $request->user()->id) {
+            throw (new ModelNotFoundException)->setModel(Project::class, [$project->getRouteKey()]);
+        }
+
+        return $project;
     }
 }

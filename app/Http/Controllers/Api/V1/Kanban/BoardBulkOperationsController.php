@@ -17,7 +17,6 @@ use App\Services\Kanban\BoardAuditLogger;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
@@ -186,22 +185,6 @@ final class BoardBulkOperationsController extends Controller
         } catch (ModelNotFoundException) {
             return null;
         }
-    }
-
-    /**
-     * Mirror of BoardController::resolveOwnedProject — the bulk controller
-     * needs the same auth gate but cannot share a `private` method across
-     * two unrelated controllers. Belt-and-braces ownership check after the
-     * `Route::bind('project', ...)` closure has already filtered by
-     * owner_id.
-     */
-    private function resolveOwnedProject(Request $request, Project $project): Project
-    {
-        if ($project->owner_id !== $request->user()->id) {
-            throw (new ModelNotFoundException)->setModel(Project::class, [$project->getRouteKey()]);
-        }
-
-        return $project;
     }
 
     /**

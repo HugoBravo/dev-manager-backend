@@ -410,20 +410,13 @@ final class BoardController extends Controller
 
     /**
      * Resolve the project owned by the authenticated user; 404 otherwise.
-     * The `Route::bind('project', ...)` closure in AppServiceProvider already
-     * filters by owner_id, so the bound instance is guaranteed to belong to
-     * the authenticated user. We re-verify owner_id as belt-and-braces so the
-     * 404-not-403 contract (design §7) survives any future change to the
-     * binding closure.
+     *
+     * Moved to the `KanbanRequestScope` trait in Batch 3 so the same
+     * belt-and-braces ownership check is shared with
+     * `BoardBulkOperationsController` (and any future kanban controller).
+     * The trait-level method now owns this helper; call sites are
+     * unchanged.
      */
-    private function resolveOwnedProject(Request $request, Project $project): Project
-    {
-        if ($project->owner_id !== $request->user()->id) {
-            throw (new ModelNotFoundException)->setModel(Project::class, [$project->getRouteKey()]);
-        }
-
-        return $project;
-    }
 
     /**
      * Throw ModelNotFoundException (404) if the binding resolved a board that
