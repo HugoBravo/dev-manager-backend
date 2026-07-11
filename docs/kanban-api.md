@@ -30,6 +30,10 @@ the `kanban_*` prefix.
 15. [Thread-per-author comments](#15-thread-per-author-comments)
 16. [Out-of-scope (do not expect)](#16-out-of-scope-do-not-expect)
 17. [SQL table reference](#17-sql-table-reference)
+18. [Board soft-delete & restore](#18-board-soft-delete--restore)
+19. [Board clone](#19-board-clone)
+20. [Board bulk operations](#20-board-bulk-operations)
+21. [Board audit log](#21-board-audit-log)
 
 ---
 
@@ -497,7 +501,15 @@ Sets `archived_at = now()`. The board is hidden from default list requests.
 POST /api/v1/projects/{project}/kanban/boards/{board}/restore
 ```
 
-Clears `archived_at`. **Response**: 200 OK with the updated [Board](#32-board).
+Restores a **soft-deleted** board by clearing `deleted_at`. The board
+reappears in the default list. A board that is not currently soft-deleted
+returns **422 Unprocessable Entity** with code `not_trashed`.
+
+**Response**: 200 OK with the updated [Board](#32-board).
+
+> See [§18 Board soft-delete & restore](#18-board-soft-delete--restore) for the
+> full soft-delete lifecycle including the trash list and the `?include_deleted`
+> query parameter.
 
 ### 5.8 Delete board
 
@@ -505,9 +517,10 @@ Clears `archived_at`. **Response**: 200 OK with the updated [Board](#32-board).
 DELETE /api/v1/projects/{project}/kanban/boards/{board}
 ```
 
-**Hard delete.** If the board has any columns (with or without cards), returns
+**Soft delete.** Marks `deleted_at = now()` and hides the board from the
+default list. If the board has any columns (with or without cards), returns
 **409 Conflict** with a typed `board_has_contents` error code; nothing is
-deleted. Empty boards are deleted normally with **204 No Content**.
+deleted. Empty boards are soft-deleted with **204 No Content**.
 
 ```json
 // 409 Conflict
@@ -516,6 +529,10 @@ deleted. Empty boards are deleted normally with **204 No Content**.
   "code": "board_has_contents"
 }
 ```
+
+> The hard-delete is reserved for the nightly purge job that removes boards
+> whose `deleted_at` is older than `config('kanban.purge_after_days')` (30
+> days by default). See [§18.4 Purge job](#184-purge-job) for details.
 
 ### 5.9 Boards — error matrix
 
@@ -1167,8 +1184,9 @@ Angular features that assume they exist will fail.
 | Checklists on cards | Not implemented | Future change |
 | Activity log / event stream | Not implemented | Future change |
 | Full-text search across cards | Not implemented | Future change |
-| Soft delete on projects/boards/columns | Not implemented | `archived_at` only, as a UI filter |
-| Soft delete on cards | Not implemented | `archived_at` only, as a UI filter |
+| Soft delete on projects | Not implemented | `archived_at` only, as a UI filter |
+| Soft delete on boards | **Implemented** | `deleted_at` + 30-day restore window + purge job — see [§18](#18-board-soft-delete--restore) |
+| Soft delete on columns/cards | Not implemented | `archived_at` only, as a UI filter |
 | Background jobs / Redis | Not implemented | Synchronous only |
 | `attachment.url` field | Always `null` | Until download endpoint ships |
 
@@ -1215,6 +1233,311 @@ If a user is hard-deleted, `kanban_comments.author_id` and
 `kanban_attachments.uploader_id` are set to NULL (preserving the rows but
 orphaning the authorship). `projects.owner_id` cascades to delete the
 project entirely.
+
+---
+
+## 18. Board soft-delete & restore
+
+The board resource supports a **soft-delete** lifecycle distinct from
+`archived_at`. A soft-deleted board remains on disk with `deleted_at` set,
+is hidden from the default list, and can be restored within a 30-day window
+before the nightly purge job permanently removes it.
+
+### 18.1 DELETE — soft-delete a board
+
+```
+DELETE /api/v1/projects/{project}/kanban/boards/{board}
+```
+
+Marks `deleted_at = now()` and hides the board from the default list.
+Returns **204 No Content** on success. If the board has any columns
+(with or without cards), returns **409 Conflict** with code
+`board_has_contents` — nothing is deleted.
+
+The board is addressable by id afterwards only through the restore endpoint
+or the trashed list. See [§5.8 Delete board](#58-delete-board) for the
+short reference.
+
+### 18.2 POST `/restore` — restore a soft-deleted board
+
+```
+POST /api/v1/projects/{project}/kanban/boards/{board}/restore
+```
+
+Clears `deleted_at` and returns the restored [Board](#32-board) with
+**200 OK**. If the board is not currently soft-deleted, returns **422
+Unprocessable Entity** with code `not_trashed`. A board id that does not
+exist OR belongs to a project the caller does not own returns **404**.
+
+```json
+// 422 Unprocessable Entity
+{
+  "message": "Board is not in trash.",
+  "code": "not_trashed"
+}
+```
+
+### 18.3 GET `/trashed` — list soft-deleted boards
+
+```
+GET /api/v1/projects/{project}/kanban/boards/trashed
+```
+
+Paginated 25-per-page, ordered by `deleted_at` **descending** (newest
+trash first). Same `{ data, links, meta }` envelope as the default index.
+A foreign or non-existent project returns **404**.
+
+### 18.4 Purge job
+
+`App\Jobs\PurgeSoftDeletedBoards` runs daily at **03:00** (server timezone).
+Boards whose `deleted_at < now() - config('kanban.purge_after_days')`
+(default **30 days**) are force-deleted along with their audit-log rows
+(cascade). The job is registered in `routes/console.php`:
+
+```php
+Schedule::job(new PurgeSoftDeletedBoards)
+    ->dailyAt('03:00')
+    ->withoutOverlapping();
+```
+
+### 18.5 Query parameter — `?include_deleted=true`
+
+```
+GET /api/v1/projects/{project}/kanban/boards?include_deleted=true
+```
+
+By default the index excludes soft-deleted boards. Append
+`include_deleted=true` (or `1`) to include them in the same response.
+
+### 18.6 Error matrix
+
+| Condition | Status | Code |
+|---|---|---|
+| Foreign project | 404 | — |
+| Board has columns | 409 | `board_has_contents` |
+| Restore on an active board | 422 | `not_trashed` |
+| Restore on a missing board | 404 | — |
+
+---
+
+## 19. Board clone
+
+The clone endpoint duplicates a board **with its columns** but **without
+its cards**. Use case: spin up a new sprint from an existing template
+without dragging the old work.
+
+### 19.1 POST `/clone`
+
+```
+POST /api/v1/projects/{project}/kanban/boards/{board}/clone
+Content-Type: application/json
+
+{
+  "name": "Q3 Sprint"  // optional, max 100 chars
+}
+```
+
+Returns **201 Created** with the new [Board](#32-board). Columns from the
+source are duplicated with their `name` and `position` strings re-anchored
+to the new board's project; cards are **not** copied (the cards table ships
+in a follow-up change).
+
+### 19.2 Name resolution
+
+| Request body | Active name `"{original}"` exists? | Resulting name |
+|---|---|---|
+| omitted | no | `"{original} (Copy)"` |
+| omitted | yes | `"{original} (Copy 2)"`, ` (Copy 3)`, … |
+| `{ "name": "Q3 Sprint" }` | irrelevant | `Q3 Sprint` (no suffix) |
+| `{ "name": "Q3 Sprint" }` | yes | **422** with code `name_taken` |
+
+When the caller does not supply a name and the default `"{original} (Copy)"`
+collides with an active board, the controller appends `(Copy 2)`, `(Copy 3)`,
+… until a free name is found. The collision search is bounded at 1000
+attempts; if the name space is exhausted the controller falls back to
+`"{name} ({timestamp})"`.
+
+### 19.3 Audit entry
+
+The clone records a `cloned` action on the **source** board with payload:
+
+```json
+{
+  "source_board_id": 42,
+  "new_board_id": 87,
+  "columns_cloned": 5
+}
+```
+
+### 19.4 Error matrix
+
+| Condition | Status | Code |
+|---|---|---|
+| Source board is soft-deleted | 404 | — |
+| Foreign project | 404 | — |
+| `name` longer than 100 chars | 422 | (validation error on `name`) |
+| Explicit `name` collides with an active board | 422 | `name_taken` |
+
+---
+
+## 20. Board bulk operations
+
+Power-user endpoints that act on many boards in a single request. Both
+endpoints always return **200 OK** with a per-item result map so the UI
+can render partial-failure states without parsing heterogeneous error
+codes.
+
+### 20.1 POST `/bulk-delete`
+
+```
+POST /api/v1/projects/{project}/kanban/boards/bulk-delete
+Content-Type: application/json
+
+{
+  "ids": [1, 2, 3, 4, 5]
+}
+```
+
+Soft-deletes each id in turn. **Maximum 100 ids per request** (validation
+returns **422** with code `max_100` if exceeded; nothing is mutated).
+
+### 20.2 POST `/bulk-rename`
+
+```
+POST /api/v1/projects/{project}/kanban/boards/bulk-rename
+Content-Type: application/json
+
+{
+  "ids": [1, 2, 3],
+  "prefix": "v2-",
+  "mode": "add"  // or "remove"
+}
+```
+
+Adds (or strips) `prefix` from each board's name. With `mode: "remove"` on
+a board whose name does not start with `prefix`, the entry reports
+`status: 200` as a **no-op** — no mutation, no audit row.
+
+### 20.3 Response shape
+
+```json
+{
+  "data": {
+    "results": [
+      { "id": 1, "status": 204 },
+      { "id": 2, "status": 409, "error": { "code": "board_has_contents" } },
+      { "id": 3, "status": 404, "error": { "code": "not_found" } },
+      { "id": 4, "status": 200, "name": "v2-Sprint 4" },
+      { "id": 5, "status": 422, "error": { "code": "name_taken" } }
+    ],
+    "summary": {
+      "total": 5,
+      "ok": 2,
+      "failed": 3
+    }
+  }
+}
+```
+
+Per-item status codes: `200` (renamed), `204` (deleted), `404` (foreign
+or missing), `409` (`board_has_contents`), `422` (`name_taken`).
+Per-item `error.code` is the canonical machine-readable code; `message`
+is optional and may be omitted.
+
+### 20.4 Rate limiting
+
+Both bulk endpoints consume **one** request against the `throttle:api`
+60/min budget, regardless of how many ids the payload contains.
+
+### 20.5 Audit entries
+
+Each successful item records an audit row on the affected board:
+
+| Action | Recorded when | Payload |
+|---|---|---|
+| `bulk_deleted` | `status: 204` in `/bulk-delete` | `{}` |
+| `bulk_renamed` | `status: 200` in `/bulk-rename` | `{ "name": "<new name>" }` |
+
+`status: 200` no-ops from `mode: "remove"` do NOT record an audit row.
+
+### 20.6 Error matrix
+
+| Condition | Status | Code |
+|---|---|---|
+| More than 100 ids | 422 | `max_100` |
+| Missing `ids` | 422 | (validation error on `ids`) |
+| `prefix` longer than 50 chars | 422 | (validation error on `prefix`) |
+| `mode` not in `["add", "remove"]` | 422 | (validation error on `mode`) |
+| Foreign project | 404 | — |
+
+---
+
+## 21. Board audit log
+
+Append-only audit trail of board lifecycle events, surfaced read-only via
+a paginated endpoint. Powers the "who renamed this and when" question
+without exposing write-side tooling.
+
+### 21.1 GET `/audit`
+
+```
+GET /api/v1/projects/{project}/kanban/boards/{board}/audit
+```
+
+Paginated **25 entries per page**, ordered `created_at desc` (newest
+first). Same `{ data, links, meta }` envelope as the index.
+
+### 21.2 Authorization
+
+Only the project owner can view the audit log. **Non-owners receive 404**
+(never 403 — matches the cross-owner contract). A board id that does not
+exist also returns 404.
+
+### 21.3 Resource shape
+
+Each entry is a `BoardAuditLogResource` with the following fields:
+
+```json
+{
+  "data": {
+    "id": 1024,
+    "board_id": 42,
+    "actor_user_id": 7,
+    "action": "renamed",
+    "payload": { "from": "Old name", "to": "New name" },
+    "created_at": "2026-07-11T14:32:18.000000Z"
+  }
+}
+```
+
+`actor_user_id` is `null` for system-driven events (the nightly purge
+job is the only such event in this slice).
+
+### 21.4 Cascade behaviour
+
+`board_audit_logs.board_id` has `cascadeOnDelete` against `kanban_boards.id`.
+When the purge job force-deletes a board past its restore window, its
+audit rows are removed in the same transaction. There is no separate
+audit retention policy.
+
+### 21.5 Canonical actions
+
+| Action | Recorded when | `payload` shape |
+|---|---|---|
+| `created` | `POST /boards` succeeds | `{}` |
+| `renamed` | `PATCH /boards/{id}` succeeds | `{ "from": string, "to": string }` |
+| `archived` | `POST /boards/{id}/archive` toggles `archived_at` to a timestamp | `{ "archived_at": "ISO-8601 string" }` |
+| `unarchived` | `POST /boards/{id}/archive` toggles `archived_at` to `null` | `{ "archived_at": null }` |
+| `reordered` | `POST /boards/reorder` persists a new `position` | `{ "from_position": string, "to_position": string }` |
+| `restored` | `POST /boards/{id}/restore` succeeds | `{}` |
+| `purged` | Purge job force-deletes the board | `{}` *(row is then cascade-deleted with the board)* |
+| `cloned` | `POST /boards/{id}/clone` creates a new board | `{ "source_board_id": int, "new_board_id": int, "columns_cloned": int }` |
+| `bulk_deleted` | `bulk-delete` succeeds for an item | `{}` |
+| `bulk_renamed` | `bulk-rename` succeeds for an item | `{ "name": string }` |
+
+The frontend audit panel may branch on `action` to render the `payload`
+appropriately; new actions can be added by extending the list in
+`KanbanBoardAuditLogFactory::ACTIONS`.
 
 ---
 
