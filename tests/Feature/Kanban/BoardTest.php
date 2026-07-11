@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\KanbanBoard;
+use App\Models\KanbanBoardAuditLog;
 use App\Models\Project;
 use App\Models\User;
 use App\Policies\KanbanBoardPolicy;
@@ -165,6 +166,65 @@ it('updates a boards name for the project owner', function (): void {
         ->assertJsonPath('data.name', 'Renamed');
 
     expect($board->fresh()->name)->toBe('Renamed');
+});
+
+it('writes a renamed audit row when board name changes', function (): void {
+    // Spec capability `board-audit-log` (sdd/boards-kanban-crud-full/spec §5)
+    // requires a `renamed` audit row whenever the board name changes via
+    // PATCH /boards/{board}, carrying `old_name` + `new_name` in the payload.
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+    $board = KanbanBoard::factory()->for($project, 'project')->create([
+        'name' => 'Original',
+    ]);
+
+    $this->actingAs($owner, 'sanctum')
+        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}", [
+            'name' => 'Renamed',
+        ])
+        ->assertOk();
+
+    // Authoritative audit row: board_id + action. actor_user_id asserted
+    // separately via the explicit query below because assertDatabaseHas
+    // JSON-casts the payload column on a non-strict lookup.
+    $this->assertDatabaseHas('board_audit_logs', [
+        'board_id' => $board->id,
+        'action' => 'renamed',
+    ]);
+
+    $row = KanbanBoardAuditLog::query()
+        ->where('board_id', $board->id)
+        ->where('action', 'renamed')
+        ->first();
+
+    expect($row)->not->toBeNull();
+    expect($row->actor_user_id)->toBe($owner->id);
+    expect($row->payload)->toMatchArray([
+        'old_name' => 'Original',
+        'new_name' => 'Renamed',
+    ]);
+});
+
+it('does NOT write a renamed audit row when the new name equals the current name', function (): void {
+    // No-op rename: same name submitted → no audit spam. The unique-name
+    // rule would 422 if it collided with another board, so passing the
+    // current name back is the only "change without change" path.
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+    $board = KanbanBoard::factory()->for($project, 'project')->create([
+        'name' => 'Stable',
+    ]);
+
+    $this->actingAs($owner, 'sanctum')
+        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}", [
+            'name' => 'Stable',
+        ])
+        ->assertOk();
+
+    expect(KanbanBoardAuditLog::query()
+        ->where('board_id', $board->id)
+        ->where('action', 'renamed')
+        ->exists())->toBeFalse();
 });
 
 it('returns 404 when a non-owner updates a board', function (): void {

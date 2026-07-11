@@ -128,6 +128,13 @@ final class BoardController extends Controller
 
     /**
      * Rename a board (cross-owner -> 404 via binding closure).
+     *
+     * Spec capability `board-audit-log` (sdd/boards-kanban-crud-full/spec §5)
+     * requires a `renamed` audit row whenever the name changes, carrying
+     * `old_name` + `new_name` in the payload. We snapshot the previous name
+     * BEFORE `save()` and use `wasChanged('name')` so a no-op PATCH (same
+     * name submitted back) does not pollute the audit panel.
+     *
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
     public function update(UpdateBoardRequest $request, Project $project, KanbanBoard $board): JsonResponse
@@ -137,7 +144,15 @@ final class BoardController extends Controller
         $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
         $this->authorize('update', $board);
 
+        $oldName = (string) $board->name;
         $board->fill($request->validated())->save();
+
+        if ($board->wasChanged('name')) {
+            app(BoardAuditLogger::class)->record($board, 'renamed', [
+                'old_name' => $oldName,
+                'new_name' => (string) $board->name,
+            ]);
+        }
 
         return (new BoardResource($board->fresh()))->response();
     }
