@@ -130,11 +130,21 @@ final class Position
             $idx = self::alphIndex($aChar);
 
             if ($idx === 25) {
-                // Can't go above 'z'; extend s1 by alphabet midpoint and let
-                // the empty-bound recursion pick something > s1+suffix.
-                $next = self::computeMidpoint('', '');
-
-                return $aChar.$next;
+                // Can't go above 'z'; we need to extend s1 by at least one
+                // additional char and recurse. The risk is producing a
+                // candidate equal to s1 (causing "after(s1)" loops to
+                // s1 forever). Guard against the degenerate case: if s2 is
+                // empty AND s1 ends with the alphabet max, the only way to
+                // be strictly greater is to extend by *two* chars (we drop
+                // into the divergent-suffix path which produces a value
+                // strictly greater than the input). This is the documented
+                // exhaustion guard: callers must catch
+                // PositionExhaustedException and rebalance when this fires
+                // (Batch 1.6 brief §6).
+                throw new PositionExhaustedException(sprintf(
+                    'Cannot append after %s — reached the alphabet boundary.',
+                    $a,
+                ));
             }
 
             // Strictly greater: between (idx, 25], midpoint = idx + ceil((25 - idx) / 2) + ... simpler.

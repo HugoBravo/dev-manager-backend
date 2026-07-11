@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1\Kanban;
 
 use App\Exceptions\Kanban\BoardHasContentsException;
 use App\Exceptions\Kanban\BoardNotTrashedException;
+use App\Exceptions\Kanban\PositionExhaustedException;
 use App\Http\Controllers\Api\V1\Kanban\Concerns\KanbanRequestScope;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Kanban\ReorderBoardsRequest;
@@ -15,6 +16,7 @@ use App\Http\Resources\Kanban\BoardResource;
 use App\Models\KanbanBoard;
 use App\Models\Project;
 use App\Services\Kanban\BoardAuditLogger;
+use App\ValueObjects\Kanban\Position;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Http\JsonResponse;
@@ -68,19 +70,42 @@ final class BoardController extends Controller
     }
 
     /**
-     * Create a board. Position is auto-assigned as a fresh-mid fraction.
+     * Create a board. Position is auto-assigned via the `Position` VO
+     * (lexorank fractional indexing). The full path runs inside a
+     * `DB::transaction` with `lockForUpdate` so concurrent appends cannot
+     * race on `rightmost`. On `PositionExhaustedException` the controller
+     * triggers a rebalance: rewrite every board's position to a fresh
+     * indexed sequence and retry the append once (Batch 1.6 brief).
      */
     public function store(StoreBoardRequest $request, Project $project): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
 
-        $nextPosition = $this->nextPositionForProject($projectModel);
+        try {
+            $board = DB::transaction(function () use ($request, $projectModel): KanbanBoard {
+                $nextPosition = $this->nextPositionForProject($projectModel);
 
-        $board = KanbanBoard::query()->create([
-            'project_id' => $projectModel->id,
-            'name' => $request->validated('name'),
-            'position' => $nextPosition,
-        ]);
+                return KanbanBoard::query()->create([
+                    'project_id' => $projectModel->id,
+                    'name' => $request->validated('name'),
+                    'position' => $nextPosition,
+                ]);
+            });
+        } catch (PositionExhaustedException) {
+            DB::transaction(function () use ($projectModel): void {
+                $this->rebalanceProjectPositions($projectModel);
+            });
+
+            $board = DB::transaction(function () use ($request, $projectModel): KanbanBoard {
+                $nextPosition = $this->nextPositionForProject($projectModel);
+
+                return KanbanBoard::query()->create([
+                    'project_id' => $projectModel->id,
+                    'name' => $request->validated('name'),
+                    'position' => $nextPosition,
+                ]);
+            });
+        }
 
         return (new BoardResource($board))->response()->setStatusCode(201);
     }
@@ -286,22 +311,56 @@ final class BoardController extends Controller
     }
 
     /**
-     * Compute the next position to append under a project. Picks the largest
-     * existing position + 1 lex-rank increment. Naive; Batch 3 replaces with
-     * the `Position` value object's `append()`.
+     * Compute the next position to append under a project via the
+     * `Position` value object. Picks the largest existing position and asks
+     * `Position::after($rightmost)` for a strictly-greater value within
+     * the 1024-byte cap. Returns `Position::start()` when the project has
+     * no boards.
+     *
+     * Wrapped by the controller in `DB::transaction` with `lockForUpdate`
+     * so concurrent appends cannot race on `rightmost`. Throws
+     * `PositionExhaustedException` when the alphabet is saturated; the
+     * controller catches that and triggers `rebalanceProjectPositions`.
+     *
+     * @throws PositionExhaustedException
      */
     private function nextPositionForProject(Project $project): string
     {
-        $largest = KanbanBoard::query()
+        $rightmost = KanbanBoard::query()
             ->where('project_id', $project->id)
+            ->lockForUpdate()
             ->orderByDesc('position')
             ->value('position');
 
-        if ($largest === null) {
-            return self::BASE_FRACTION;
+        if ($rightmost === null) {
+            return Position::start()->value();
         }
 
-        return $largest.'a';
+        return Position::after($rightmost)->value();
+    }
+
+    /**
+     * Rebalance: rewrite every board's position to a fresh indexed sequence
+     * derived from the `indexedPosition()` helper. The board order is
+     * preserved (read in current ordering) and the rebalance produces
+     * positions small enough to leave room for many future appends.
+     */
+    private function rebalanceProjectPositions(Project $project): void
+    {
+        $boardIds = KanbanBoard::query()
+            ->where('project_id', $project->id)
+            ->orderBy('position')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->pluck('id')
+            ->all();
+
+        foreach ($boardIds as $index => $boardId) {
+            KanbanBoard::query()
+                ->whereKey($boardId)
+                ->where('project_id', $project->id)
+                ->update(['position' => $this->indexedPosition($index)]);
+        }
     }
 
     /**
