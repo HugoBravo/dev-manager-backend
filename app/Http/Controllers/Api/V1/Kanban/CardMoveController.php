@@ -79,6 +79,17 @@ final class CardMoveController extends Controller
         $card->position = $this->nextPositionForColumn($targetColumn->id);
         $card->save();
 
-        return (new CardResource($card->fresh()))->response();
+        // `fresh()` re-reads the row but DROPS every relation that was on
+        // the in-memory model — including `labels`. The CardResource then
+        // sees `relationLoaded('labels') === false` and serialises an
+        // empty `labels` array, which the frontend treats as the truth
+        // and strips the labels from its cache (the cards look label-less
+        // until a full refetch pulls them back). Eager-load the relation
+        // explicitly so the response shape matches what CardController
+        // already returns for the create/update verbs.
+        $card = $card->fresh();
+        $card->load('labels');
+
+        return (new CardResource($card))->response();
     }
 }
