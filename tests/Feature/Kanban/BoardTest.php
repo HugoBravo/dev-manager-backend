@@ -194,7 +194,7 @@ it('rejects update with name longer than 100 chars', function (): void {
         ->assertJsonValidationErrors(['name']);
 });
 
-it('deletes an empty board with 204', function (): void {
+it('deletes an empty board with 204 (soft-delete: row stays, deleted_at is set)', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
     $board = KanbanBoard::factory()->for($project, 'project')->create();
@@ -203,7 +203,28 @@ it('deletes an empty board with 204', function (): void {
         ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
         ->assertNoContent();
 
-    expect(KanbanBoard::query()->find($board->id))->toBeNull();
+    // Soft-deletion leaves the row on disk with `deleted_at` populated so the
+    // trash + restore flows (Batch 1.4) can resurrect it within the window.
+    $this->assertSoftDeleted('kanban_boards', ['id' => $board->id]);
+});
+
+it('returns 404 when GET-ting a soft-deleted board', function (): void {
+    // Regression for the SoftDeletes trait: the global scope filters out
+    // trashed rows from every query (including the {board} Route::bind
+    // closure), so a soft-deleted board must read as "not found" until the
+    // restore flow (Batch 1.4) brings it back. This guarantees we never
+    // leak the existence of a trashed board to API callers.
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+    $board = KanbanBoard::factory()->for($project, 'project')->create();
+
+    $this->actingAs($owner, 'sanctum')
+        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->assertNoContent();
+
+    $this->actingAs($owner, 'sanctum')
+        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->assertNotFound();
 });
 
 it('returns 409 when destroying a board that has columns (with cards under it)', function (): void {
