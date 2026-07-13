@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\KanbanBoard;
 use App\Models\Project;
 use App\Models\User;
 
@@ -279,4 +280,48 @@ it('sets archived_at when patching a project', function (): void {
 
     $fresh = $project->fresh();
     expect($fresh->archived_at)->not->toBeNull();
+});
+
+it('archives a project idempotently', function (): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->for($owner, 'owner')->create(['archived_at' => null]);
+
+    $first = now()->subMinutes(5)->toIso8601String();
+
+    $this->actingAs($owner, 'sanctum')
+        ->patchJson("/api/v1/projects/{$project->id}", ['archived_at' => $first])
+        ->assertOk()
+        ->assertJsonPath('data.archived_at', $first);
+
+    // Issuing a second archive PATCH (with a different timestamp) is
+    // idempotent at the HTTP layer: still 200, still returns the updated
+    // resource. The frontend treats archive-twice as a no-op UX-wise
+    // because the card is hidden after the first archive, but the API
+    // contract permits repeated calls without error.
+    $second = now()->toIso8601String();
+
+    $this->actingAs($owner, 'sanctum')
+        ->patchJson("/api/v1/projects/{$project->id}", ['archived_at' => $second])
+        ->assertOk()
+        ->assertJsonPath('data.archived_at', $second);
+
+    expect($project->fresh()->archived_at->toIso8601String())->toBe($second);
+});
+
+it('deleting a project cascades to its kanban boards', function (): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->for($owner, 'owner')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
+
+    expect(KanbanBoard::query()->whereKey($board->id)->exists())->toBeTrue();
+
+    $this->actingAs($owner, 'sanctum')
+        ->deleteJson("/api/v1/projects/{$project->id}")
+        ->assertNoContent();
+
+    // Board FK is cascadeOnDelete at the DB layer; even though KanbanBoard
+    // uses SoftDeletes in app code, the raw row is gone after the project
+    // is hard-deleted. withTrashed() confirms absence regardless of any
+    // stale Eloquent soft-delete state.
+    expect(KanbanBoard::query()->withTrashed()->whereKey($board->id)->exists())->toBeFalse();
 });
