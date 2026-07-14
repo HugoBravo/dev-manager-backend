@@ -128,6 +128,19 @@ it('rejects create when key contains invalid characters', function (): void {
         ->assertJsonValidationErrors(['key']);
 });
 
+it('accepts identifiers with email-like keys (letters, digits, ., _, @, +, -)', function (): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+
+    $this->actingAs($owner, 'sanctum')
+        ->postJson("/api/v1/projects/{$project->id}/secrets", [
+            'key' => 'gh-cashflow-api@hostalbelen.cl',
+            'value' => 'super-secret',
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.key', 'gh-cashflow-api@hostalbelen.cl');
+});
+
 it('rejects create when key is longer than 100 chars', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();

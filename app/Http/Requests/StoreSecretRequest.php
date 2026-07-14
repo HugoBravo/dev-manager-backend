@@ -42,7 +42,7 @@ final class StoreSecretRequest extends FormRequest
                 'string',
                 'min:1',
                 'max:100',
-                'regex:/^[A-Za-z0-9._-]+$/',
+                'regex:/^[A-Za-z0-9._@+-]+$/',
                 new UniqueSecretKey(
                     projectId: $project instanceof Project ? (int) $project->getKey() : (int) $project,
                 ),
