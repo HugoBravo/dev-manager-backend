@@ -11,23 +11,27 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 final class SessionController extends Controller
 {
     public function store(LoginRequest $request): JsonResponse
     {
-        $credentials = $request->only(['email', 'password']);
+        $email = (string) $request->input('email');
+        $password = (string) $request->input('password');
 
-        if (! Auth::guard('web')->attempt($credentials, remember: false)) {
+        // Manual lookup so we can ALSO exclude soft-deleted users (scenario
+        // S14 of the user-administration capability). Auth::guard('web')-
+        // >attempt() goes through EloquentUserProvider which ignores the
+        // SoftDeletes global scope.
+        $user = User::query()->where('email', $email)->first();
+
+        if ($user === null || ! Hash::check($password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => [__('auth.failed')],
             ]);
         }
-
-        /** @var User $user */
-        $user = Auth::guard('web')->user();
 
         $deviceName = (string) $request->input('device_name', 'unknown');
         $token = $user->createToken($deviceName);

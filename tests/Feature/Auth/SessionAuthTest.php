@@ -126,6 +126,23 @@ it('returns 401 when calling /api/auth/logout without bearer', function (): void
     $this->postJson('/api/auth/logout')->assertUnauthorized();
 });
 
+it('blocks login of a soft-deleted user with the correct credentials (S14)', function (): void {
+    $user = User::factory()->create([
+        'email' => 'ghost@example.com',
+        'password' => bcrypt('password'),
+    ]);
+    $user->delete();
+
+    $response = $this->postJson('/api/auth/login', [
+        'email' => 'ghost@example.com',
+        'password' => 'password',
+        'device_name' => 'phpunit',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['email']);
+});
+
 it('enforces throttle on /api/auth/login', function (): void {
     RateLimiter::clear('login:127.0.0.1');
     RateLimiter::clear('login:::1');

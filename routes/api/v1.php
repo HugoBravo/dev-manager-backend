@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\Kanban\CommentController;
 use App\Http\Controllers\Api\V1\Kanban\KanbanLabelController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\SecretController;
+use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -204,5 +205,18 @@ Route::middleware(['auth:sanctum', 'throttle:api'])
                 'show' => 'api.v1.kanban-labels.show',
                 'update' => 'api.v1.kanban-labels.update',
                 'destroy' => 'api.v1.kanban-labels.destroy',
+            ]);
+
+        // User administration (Batch user-administration). Global capability
+        // (not nested under /projects/{project}). Self-service read+update
+        // on own record; admin-gated list/create/destroy. Soft-delete +
+        // token revocation lives in UserController::destroy.
+        Route::apiResource('users', UserController::class)
+            ->names([
+                'index' => 'api.v1.users.index',
+                'store' => 'api.v1.users.store',
+                'show' => 'api.v1.users.show',
+                'update' => 'api.v1.users.update',
+                'destroy' => 'api.v1.users.destroy',
             ]);
     });

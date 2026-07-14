@@ -24,6 +24,9 @@ final class UserResource extends JsonResource
                 'name' => $this->resource->name,
                 'email' => $this->resource->email,
                 'email_verified_at' => optional($this->resource->email_verified_at)?->toIso8601String(),
+                'is_admin' => (bool) $this->resource->is_admin,
+                'created_at' => optional($this->resource->created_at)?->toIso8601String(),
+                'updated_at' => optional($this->resource->updated_at)?->toIso8601String(),
             ],
         ];
     }
