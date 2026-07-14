@@ -10,12 +10,14 @@ use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
 use App\Models\KanbanComment;
 use App\Models\Project;
+use App\Models\Secret;
 use App\Policies\KanbanAttachmentPolicy;
 use App\Policies\KanbanBoardPolicy;
 use App\Policies\KanbanCardPolicy;
 use App\Policies\KanbanColumnPolicy;
 use App\Policies\KanbanCommentPolicy;
 use App\Policies\ProjectPolicy;
+use App\Policies\SecretPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
@@ -56,6 +58,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(KanbanCard::class, KanbanCardPolicy::class);
         Gate::policy(KanbanComment::class, KanbanCommentPolicy::class);
         Gate::policy(KanbanAttachment::class, KanbanAttachmentPolicy::class);
+        Gate::policy(Secret::class, SecretPolicy::class);
 
         // Ownership-scoped route binding for `{project}`. URI segments may
         // arrive as either a numeric id (legacy callers / tests) or a slug
@@ -275,6 +278,30 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return $attachment;
+        });
+
+        // Ownership-scoped route binding for `{secret}`. Walks
+        // project -> owner — secret only resolves if the secret's project
+        // belongs to the authenticated user. Cross-owner resolves to 404
+        // matching the 404-not-403 contract documented in design §7.
+        Route::bind('secret', function (string $value): Secret {
+            $userId = request()->user()?->id;
+            if ($userId === null) {
+                throw (new ModelNotFoundException)->setModel(Secret::class, [$value]);
+            }
+
+            $secret = Secret::query()
+                ->whereHas('project', function ($q) use ($userId): void {
+                    $q->where('owner_id', $userId);
+                })
+                ->whereKey($value)
+                ->first();
+
+            if ($secret === null) {
+                throw (new ModelNotFoundException)->setModel(Secret::class, [$value]);
+            }
+
+            return $secret;
         });
     }
 }

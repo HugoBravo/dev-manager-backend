@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\Kanban\ColumnController;
 use App\Http\Controllers\Api\V1\Kanban\CommentController;
 use App\Http\Controllers\Api\V1\Kanban\KanbanLabelController;
 use App\Http\Controllers\Api\V1\ProjectController;
+use App\Http\Controllers\Api\V1\SecretController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -169,6 +170,23 @@ Route::middleware(['auth:sanctum', 'throttle:api'])
                     'destroy' => 'api.v1.projects.kanban.boards.columns.cards.attachments.destroy',
                 ]);
         });
+
+        // Project-scoped secrets (CRUD). Lives OUTSIDE the
+        // `/projects/{project}/kanban/...` prefix because secrets are their
+        // own capability, not part of the kanban module. One list of
+        // secrets per project; `key` is unique within the project.
+        // `value` is encrypted at rest via the Secret model cast. Cross-
+        // owner resolves to 404 via the `Route::bind('secret', ...)` closure
+        // in AppServiceProvider::boot() AND the controller's
+        // `secret.project_id !== project.id` belt-and-braces.
+        Route::apiResource('projects/{project}/secrets', SecretController::class)
+            ->names([
+                'index' => 'api.v1.projects.secrets.index',
+                'store' => 'api.v1.projects.secrets.store',
+                'show' => 'api.v1.projects.secrets.show',
+                'update' => 'api.v1.projects.secrets.update',
+                'destroy' => 'api.v1.projects.secrets.destroy',
+            ]);
 
         // Kanban labels (global per user, NOT scoped to a project). A user
         // has one set of labels and applies them to cards across all their
