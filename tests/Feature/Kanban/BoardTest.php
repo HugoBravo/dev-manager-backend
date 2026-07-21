@@ -545,6 +545,41 @@ it('exposes the resource shape with id, task_id, embedded task, name, position, 
     $response->assertJsonMissingPath('data.project_id');
 });
 
+it('embeds a populated task object on every board index entry (REQ-RESOURCES-2)', function (): void {
+    // Verify CRITICAL #1 from the verify report: `BoardResource` lazy fallback
+    // returned `{id, name:null, slug:null, status:null, archived_at:null}` on
+    // the index path because `BoardController::index` did not eager-load
+    // the `task` relation. This regression test pins every populated field
+    // so a future controller refactor cannot silently regress to the
+    // null-fallback shape without breaking the assertion set.
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+    $task = Task::factory()->default()->create([
+        'project_id' => $project->id,
+        'name' => 'Refactor checkout',
+        'slug' => 'refactor-checkout',
+        'status' => 'in_progress',
+    ]);
+    KanbanBoard::factory()->forTask($task)->count(2)->create();
+
+    $response = $this->actingAs($owner, 'sanctum')
+        ->getJson("/api/v1/projects/{$project->id}/tasks/{$task->id}/kanban/boards")
+        ->assertOk();
+
+    $entries = collect($response->json('data'));
+    expect($entries)->toHaveCount(2);
+
+    foreach ($entries as $entry) {
+        $taskPayload = $entry['data']['task'] ?? null;
+        expect($taskPayload)->toBeArray()
+            ->and($taskPayload['id'])->toBe($task->id)
+            ->and($taskPayload['name'])->toBe('Refactor checkout')
+            ->and($taskPayload['slug'])->toBe('refactor-checkout')
+            ->and($taskPayload['status'])->toBe('in_progress')
+            ->and($taskPayload['archived_at'])->toBeNull();
+    }
+});
+
 it('caps board position strings at 1024 bytes', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();

@@ -65,6 +65,7 @@ final class BoardController extends Controller
         }
 
         $boards = KanbanBoard::query()
+            ->with('task')
             ->where('task_id', $task->id)
             ->whereNull('archived_at')
             ->orderBy('position')
@@ -111,6 +112,11 @@ final class BoardController extends Controller
             });
         }
 
+        // Eager-load the `task` relation so `BoardResource`'s embedded `task`
+        // object is fully populated (REQ-RESOURCES-2). Without this, the
+        // resource emits a `{id, name:null, slug:null, ...}` lazy fallback.
+        $board->load('task');
+
         return (new BoardResource($board))->response()->setStatusCode(201);
     }
 
@@ -127,6 +133,10 @@ final class BoardController extends Controller
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
         $this->ensureNotArchivedTask($request, $task, $task->getKey());
+
+        // Eager-load `task` so `BoardResource` emits populated fields
+        // instead of the lazy-fallback null shape (REQ-RESOURCES-2).
+        $board->load('task');
 
         return (new BoardResource($board))->response();
     }
@@ -159,7 +169,7 @@ final class BoardController extends Controller
             ]);
         }
 
-        return (new BoardResource($board->fresh()))->response();
+        return (new BoardResource($board->fresh()->load('task')))->response();
     }
 
     /**
@@ -224,7 +234,7 @@ final class BoardController extends Controller
             'archived_at' => $board->archived_at?->toIso8601String(),
         ]);
 
-        return (new BoardResource($board->fresh()))->response();
+        return (new BoardResource($board->fresh()->load('task')))->response();
     }
 
     /**
@@ -291,7 +301,7 @@ final class BoardController extends Controller
         $logger->record($clone, 'cloned', $clonePayload);
         $logger->record($board, 'cloned', $clonePayload);
 
-        return (new BoardResource($clone->fresh()))->response()->setStatusCode(201);
+        return (new BoardResource($clone->fresh()->load('task')))->response()->setStatusCode(201);
     }
 
     /**
@@ -413,7 +423,7 @@ final class BoardController extends Controller
             app(BoardAuditLogger::class)->record($trashed, 'restored', []);
         });
 
-        return (new BoardResource($trashed->fresh()))->response();
+        return (new BoardResource($trashed->fresh()->load('task')))->response();
     }
 
     /**
@@ -428,6 +438,7 @@ final class BoardController extends Controller
         $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         $boards = KanbanBoard::query()
+            ->with('task')
             ->withoutGlobalScope(SoftDeletingScope::class)
             ->where('task_id', $task->id)
             ->whereNotNull('deleted_at')
