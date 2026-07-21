@@ -177,8 +177,10 @@ class AppServiceProvider extends ServiceProvider
                 throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$value]);
             }
 
+            // After commit 8 `kanban_boards.project_id` is gone — the
+            // owning project is reachable via the `task` relationship.
             $board = KanbanBoard::query()
-                ->whereHas('project', function ($q) use ($userId): void {
+                ->whereHas('task.project', function ($q) use ($userId): void {
                     $q->where('owner_id', $userId);
                 })
                 ->whereKey($value)
@@ -204,7 +206,7 @@ class AppServiceProvider extends ServiceProvider
 
             $board = KanbanBoard::query()
                 ->withTrashed()
-                ->whereHas('project', function ($q) use ($userId): void {
+                ->whereHas('task.project', function ($q) use ($userId): void {
                     $q->where('owner_id', $userId);
                 })
                 ->whereKey($value)
@@ -218,8 +220,9 @@ class AppServiceProvider extends ServiceProvider
         });
 
         // Ownership-scoped route binding for `{column}`. The closure walks
-        // board -> project -> owner — one level deeper than {board} because
-        // every column is reached via /projects/{project}/boards/{board}/columns/{column}.
+        // board -> task -> project -> owner — three levels deep now that
+        // the chain goes through `Task`. Every column is reached via
+        // /projects/{project}/tasks/{task}/kanban/boards/{board}/columns/{column}.
         // A column whose board is owned by a stranger resolves to 404 here
         // and the controller's `ensureColumnBelongsToBoard` provides a
         // second check (URL consistency, not ownership).
@@ -230,7 +233,7 @@ class AppServiceProvider extends ServiceProvider
             }
 
             $column = KanbanColumn::query()
-                ->whereHas('board.project', function ($q) use ($userId): void {
+                ->whereHas('board.task.project', function ($q) use ($userId): void {
                     $q->where('owner_id', $userId);
                 })
                 ->whereKey($value)
@@ -243,12 +246,9 @@ class AppServiceProvider extends ServiceProvider
             return $column;
         });
 
-        // Ownership-scoped route binding for `{card}` (Batch 4). The closure
-        // walks column -> board -> project -> owner — one level deeper than
-        // {column} because every card is reached via
-        // /projects/{project}/boards/{board}/columns/{column}/cards/{card}.
-        // A card whose column belongs to a stranger's project chain resolves
-        // to 404 here; the controller's `ensureCardBelongsToColumn` provides
+        // Ownership-scoped route binding for `{card}`. The closure walks
+        // column -> board -> task -> project -> owner. Cross-owner returns
+        // 404 here; the controller's `ensureCardBelongsToColumn` provides
         // a second check (URL consistency, not ownership).
         Route::bind('card', function (string $value): KanbanCard {
             $userId = request()->user()?->id;
@@ -257,7 +257,7 @@ class AppServiceProvider extends ServiceProvider
             }
 
             $card = KanbanCard::query()
-                ->whereHas('column.board.project', function ($q) use ($userId): void {
+                ->whereHas('column.board.task.project', function ($q) use ($userId): void {
                     $q->where('owner_id', $userId);
                 })
                 ->whereKey($value)
@@ -270,8 +270,8 @@ class AppServiceProvider extends ServiceProvider
             return $card;
         });
 
-        // Ownership-scoped route binding for `{comment}` (Batch 5). Walks
-        // card -> column -> board -> project -> owner — the deepest chain
+        // Ownership-scoped route binding for `{comment}`. Walks card ->
+        // column -> board -> task -> project -> owner — the deepest chain
         // in the kanban URLs. Cross-owner returns 404; controller's
         // `comment.card_id !== $card->id` check covers cross-card 404s.
         Route::bind('comment', function (string $value): KanbanComment {
@@ -281,7 +281,7 @@ class AppServiceProvider extends ServiceProvider
             }
 
             $comment = KanbanComment::query()
-                ->whereHas('card.column.board.project', function ($q) use ($userId): void {
+                ->whereHas('card.column.board.task.project', function ($q) use ($userId): void {
                     $q->where('owner_id', $userId);
                 })
                 ->whereKey($value)
@@ -294,9 +294,9 @@ class AppServiceProvider extends ServiceProvider
             return $comment;
         });
 
-        // Ownership-scoped route binding for `{attachment}` (Batch 6).
-        // Walks card -> column -> board -> project -> owner — same depth
-        // as `{comment}`. Cross-owner returns 404; controller's
+        // Ownership-scoped route binding for `{attachment}`. Walks card
+        // -> column -> board -> task -> project -> owner — same depth as
+        // `{comment}`. Cross-owner returns 404; controller's
         // `attachment.card_id !== $card->id` covers cross-card 404s.
         Route::bind('attachment', function (string $value): KanbanAttachment {
             $userId = request()->user()?->id;
@@ -305,7 +305,7 @@ class AppServiceProvider extends ServiceProvider
             }
 
             $attachment = KanbanAttachment::query()
-                ->whereHas('card.column.board.project', function ($q) use ($userId): void {
+                ->whereHas('card.column.board.task.project', function ($q) use ($userId): void {
                     $q->where('owner_id', $userId);
                 })
                 ->whereKey($value)

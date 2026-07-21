@@ -44,7 +44,7 @@ final class KanbanCommentPolicy
      */
     public function view(User $user, KanbanComment $comment): bool
     {
-        return $user->can('view', $comment->card->column->board->project);
+        return $user->can('view', $comment->card->column->board->task->project);
     }
 
     /**

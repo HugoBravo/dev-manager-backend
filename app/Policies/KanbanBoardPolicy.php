@@ -9,7 +9,12 @@ use App\Models\User;
 
 /**
  * KanbanBoard authorization — delegates to ProjectPolicy (the ownership chokepoint).
- * Every method routes through `$user->can('view', $board->project)`.
+ * Every method routes through `$user->can('view', $board->task->project)`.
+ *
+ * After the kanban-per-task refactor, the board's owning project is
+ * reachable only via the `task` relationship (the `kanban_boards`
+ * table no longer carries `project_id`). The lookup still terminates at
+ * `ProjectPolicy::view` so the chokepoint stays in one place.
  *
  * Cross-owner resource leak avoidance (404-not-403) is handled at route binding
  * time by the `Route::bind('board', ...)` closure in AppServiceProvider::boot().
@@ -27,12 +32,12 @@ final class KanbanBoardPolicy
 
     public function view(User $user, KanbanBoard $board): bool
     {
-        return $user->can('view', $board->project);
+        return $user->can('view', $board->task->project);
     }
 
     public function update(User $user, KanbanBoard $board): bool
     {
-        return $user->can('view', $board->project);
+        return $user->can('view', $board->task->project);
     }
 
     /**
@@ -43,7 +48,7 @@ final class KanbanBoardPolicy
      */
     public function delete(User $user, KanbanBoard $board): bool
     {
-        return $user->can('view', $board->project);
+        return $user->can('view', $board->task->project);
     }
 
     /**
@@ -51,7 +56,7 @@ final class KanbanBoardPolicy
      */
     public function archive(User $user, KanbanBoard $board): bool
     {
-        return $user->can('view', $board->project);
+        return $user->can('view', $board->task->project);
     }
 
     /**
@@ -59,7 +64,7 @@ final class KanbanBoardPolicy
      */
     public function reorder(User $user, KanbanBoard $board): bool
     {
-        return $user->can('view', $board->project);
+        return $user->can('view', $board->task->project);
     }
 
     /**
@@ -71,7 +76,7 @@ final class KanbanBoardPolicy
      */
     public function restore(User $user, KanbanBoard $board): bool
     {
-        return $user->can('view', $board->project);
+        return $user->can('view', $board->task->project);
     }
 
     /**
@@ -81,7 +86,7 @@ final class KanbanBoardPolicy
      */
     public function clone(User $user, KanbanBoard $board): bool
     {
-        return $user->can('view', $board->project);
+        return $user->can('view', $board->task->project);
     }
 
     /**
@@ -104,6 +109,6 @@ final class KanbanBoardPolicy
      */
     public function viewAudit(User $user, KanbanBoard $board): bool
     {
-        return $user->can('view', $board->project);
+        return $user->can('view', $board->task->project);
     }
 }

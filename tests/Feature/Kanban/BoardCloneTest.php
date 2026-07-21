@@ -31,7 +31,8 @@ it('clones a board with columns and no cards', function (): void {
     expect($response->json('data.name'))->toBe('Source (Copy)');
 
     $clone = KanbanBoard::query()->findOrFail($response->json('data.id'));
-    expect($clone->project_id)->toBe($project->id)
+    expect($clone->task_id)->toBe($source->task_id)
+        ->and($clone->task->project_id)->toBe($project->id)
         ->and($clone->position)->toBeString();
 
     // Verify columns cloned with the same name; cards skipped (cards table is

@@ -13,17 +13,23 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * A board groups kanban columns. Every board belongs to exactly one project,
- * which is the ownership chokepoint for KanbanBoardPolicy. Position is a base-36
+ * A board groups kanban columns. Every board belongs to exactly one task,
+ * which in turn belongs to a project — the project's owner is the
+ * authorization chokepoint for KanbanBoardPolicy. Position is a base-36
  * fractional-indexing string (see sdd/kanban/design §5 — the value object
  * ships in Batch 3; in Batch 2 we only persist and reorder the strings).
+ *
+ * As of the kanban-per-task refactor (commit 8) `kanban_boards` no longer
+ * carries a `project_id` column — reach the owning project via
+ * `$board->task->project`. The `project()` relationship was removed
+ * because the underlying FK no longer exists.
  *
  * `columns()` and `cards()` relationships are NOT declared here yet — those
  * models (KanbanColumn / KanbanCard) ship in Batch 3 / 4. The 409-on-non-empty-board
  * logic in Kanban\BoardController::destroy uses an explicit columns-table existence
  * check (lazy table inspection) until Batch 3 lands the relationship.
  */
-#[Fillable(['project_id', 'task_id', 'name', 'position', 'archived_at'])]
+#[Fillable(['task_id', 'name', 'position', 'archived_at'])]
 class KanbanBoard extends Model
 {
     /** @use HasFactory<BoardFactory> */
@@ -48,15 +54,10 @@ class KanbanBoard extends Model
     }
 
     /**
-     * The owning project — the authorization chokepoint for this model.
-     */
-    public function project(): BelongsTo
-    {
-        return $this->belongsTo(Project::class);
-    }
-
-    /**
-     * The task that owns this board during the task migration window.
+     * The task that owns this board. The owning project is reachable via
+     * `$board->task->project` — that's the chokepoint that
+     * `KanbanBoardPolicy` delegates to (so a foreign-task board never
+     * resolves to a project the user owns).
      */
     public function task(): BelongsTo
     {

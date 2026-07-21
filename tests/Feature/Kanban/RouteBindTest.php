@@ -25,7 +25,7 @@ use function Pest\Laravel\getJson;
 it('returns the project board list with a slug-keyed URL', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    KanbanBoard::factory()->for($project, 'project')->create(['name' => 'Slug Board']);
+    KanbanBoard::factory()->forProject($project)->create(['name' => 'Slug Board']);
 
     Sanctum::actingAs($owner);
 
@@ -37,7 +37,7 @@ it('returns the project board list with a slug-keyed URL', function (): void {
 it('still returns the project board list with an id-keyed URL (legacy callers)', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    KanbanBoard::factory()->for($project, 'project')->create(['name' => 'Id Board']);
+    KanbanBoard::factory()->forProject($project)->create(['name' => 'Id Board']);
 
     Sanctum::actingAs($owner);
 

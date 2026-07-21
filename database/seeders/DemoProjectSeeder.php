@@ -87,9 +87,8 @@ final class DemoProjectSeeder extends Seeder
         $task = $this->findOrCreateDefaultTask($project);
 
         return KanbanBoard::query()->updateOrCreate(
-            ['project_id' => $project->id, 'name' => 'Demo Board'],
+            ['task_id' => $task->id, 'name' => 'Demo Board'],
             [
-                'task_id' => $task->id,
                 'position' => 'm',
                 'archived_at' => null,
             ],

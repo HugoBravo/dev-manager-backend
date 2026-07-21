@@ -8,7 +8,9 @@ use App\Models\KanbanBoard;
 use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
 use App\Models\Project;
+use App\Models\Task;
 use App\Models\User;
+use App\ValueObjects\Kanban\Position;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -23,10 +25,14 @@ use Illuminate\Support\Facades\Hash;
  *   php artisan db:seed --class=ExampleDemoSeeder
  *
  * Idempotent on every run: each row is keyed by a stable composite
- * (`owner_id` + `name` for Project, `project_id` + `name` for KanbanBoard,
- * `board_id` + `name` for KanbanColumn, `column_id` + `title` for
- * KanbanCard) so re-running the seeder refreshes existing rows in place
- * instead of duplicating them.
+ * (`owner_id` + `name` for Project, `project_id` + `slug` for Task,
+ * `task_id` + `name` for KanbanBoard, `board_id` + `name` for KanbanColumn,
+ * `column_id` + `title` for KanbanCard) so re-running the seeder refreshes
+ * existing rows in place instead of duplicating them.
+ *
+ * After the kanban-per-task refactor (commit 8) the `kanban_boards.project_id`
+ * column is gone — boards are owned by tasks, tasks by projects. Each demo
+ * project gets one default task; boards are keyed under it.
  *
  * Safe to run manually against any environment. It does not touch
  * DatabaseSeeder and only writes demo content; no destructive operations.
@@ -105,11 +111,12 @@ final class ExampleDemoSeeder extends Seeder
 
         foreach (self::DEMO_PROJECTS as $projectName => $projectDescription) {
             $project = $this->ensureDemoProject($user, $projectName, $projectDescription);
+            $task = $this->ensureDefaultTask($project);
             $projectSummaries[] = $project->name.' (slug: '.$project->slug.')';
             $projectCount++;
 
             foreach (self::BOARD_NAMES as $boardIndex => $boardName) {
-                $board = $this->ensureBoard($project, $boardName, $boardIndex);
+                $board = $this->ensureBoard($task, $boardName, $boardIndex);
                 $boardCount++;
 
                 foreach (self::COLUMN_NAMES as $columnIndex => $columnName) {
@@ -125,7 +132,7 @@ final class ExampleDemoSeeder extends Seeder
         foreach ($projectSummaries as $line) {
             $this->command?->info('  - '.$line);
         }
-        $this->command?->info('Boards seeded: '.$boardCount);
+        $this->command?->info('Boards seeded/updated: '.$boardCount);
         $this->command?->info('Cards seeded/updated: '.$cardCount);
     }
 
@@ -151,10 +158,30 @@ final class ExampleDemoSeeder extends Seeder
         );
     }
 
-    private function ensureBoard(Project $project, string $name, int $index): KanbanBoard
+    /**
+     * Find or create the canonical "Default" task under the project. The
+     * kanban-per-task refactor requires every kanban chain URL to resolve
+     * through a `{task}` segment, so the demo workspace needs one default
+     * task per project — same pattern the migration uses to backfill
+     * populated databases.
+     */
+    private function ensureDefaultTask(Project $project): Task
+    {
+        return Task::query()->updateOrCreate(
+            ['project_id' => $project->id, 'slug' => 'default'],
+            [
+                'name' => 'Default',
+                'status' => 'open',
+                'description' => null,
+                'archived_at' => null,
+            ],
+        );
+    }
+
+    private function ensureBoard(Task $task, string $name, int $index): KanbanBoard
     {
         $board = KanbanBoard::query()
-            ->where('project_id', $project->id)
+            ->where('task_id', $task->id)
             ->where('name', $name)
             ->first();
 
@@ -162,7 +189,7 @@ final class ExampleDemoSeeder extends Seeder
             $board = new KanbanBoard;
         }
 
-        $board->project_id = $project->id;
+        $board->task_id = $task->id;
         $board->name = $name;
         $board->position = $this->positionAt($index, count(self::BOARD_NAMES));
         $board->save();
@@ -221,7 +248,7 @@ final class ExampleDemoSeeder extends Seeder
 
     /**
      * Generate a stable position string for demo data. The string lives in
-     * the same a..z alphabet as {@see \App\ValueObjects\Kanban\Position},
+     * the same a..z alphabet as {@see Position},
      * which is the only vocabulary the rest of the app understands — using
      * any other character (e.g. base-36 '0'..'9') leaves invalid rows that
      * blow up `Position::after()` on the next move.

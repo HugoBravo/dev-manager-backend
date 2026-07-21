@@ -44,7 +44,9 @@ beforeEach(function (): void {
 it('runs the full project → board → column → card → comment → attachment → cascade chain', function (): void {
     $demo = User::query()->where('email', 'demo@dev-manager.test')->firstOrFail();
     $project = Project::query()->where('name', 'Demo Kanban Project')->firstOrFail();
-    $board = KanbanBoard::query()->where('project_id', $project->id)->firstOrFail();
+    $board = KanbanBoard::query()
+        ->whereHas('task', fn ($q) => $q->where('project_id', $project->id))
+        ->firstOrFail();
     $columns = KanbanColumn::query()->where('board_id', $board->id)->orderBy('position')->get();
     $cards = KanbanCard::query()->whereIn('column_id', $columns->pluck('id'))->orderBy('position')->get();
 

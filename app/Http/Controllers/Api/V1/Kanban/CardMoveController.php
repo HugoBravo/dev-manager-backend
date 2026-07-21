@@ -62,7 +62,7 @@ final class CardMoveController extends Controller
         }
 
         $targetColumn = KanbanColumn::query()
-            ->whereHas('board.project', function ($q) use ($request): void {
+            ->whereHas('board.task.project', function ($q) use ($request): void {
                 $q->where('owner_id', $request->user()->id);
             })
             ->whereKey($targetColumnId)

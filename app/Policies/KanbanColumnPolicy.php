@@ -28,12 +28,12 @@ final class KanbanColumnPolicy
 
     public function view(User $user, KanbanColumn $column): bool
     {
-        return $user->can('view', $column->board->project);
+        return $user->can('view', $column->board->task->project);
     }
 
     public function update(User $user, KanbanColumn $column): bool
     {
-        return $user->can('view', $column->board->project);
+        return $user->can('view', $column->board->task->project);
     }
 
     /**
@@ -45,7 +45,7 @@ final class KanbanColumnPolicy
      */
     public function delete(User $user, KanbanColumn $column): bool
     {
-        return $user->can('view', $column->board->project);
+        return $user->can('view', $column->board->task->project);
     }
 
     /**
@@ -53,7 +53,7 @@ final class KanbanColumnPolicy
      */
     public function reorder(User $user, KanbanColumn $column): bool
     {
-        return $user->can('view', $column->board->project);
+        return $user->can('view', $column->board->task->project);
     }
 
     /**
@@ -63,6 +63,6 @@ final class KanbanColumnPolicy
      */
     public function move(User $user, KanbanColumn $column): bool
     {
-        return $user->can('view', $column->board->project);
+        return $user->can('view', $column->board->task->project);
     }
 }

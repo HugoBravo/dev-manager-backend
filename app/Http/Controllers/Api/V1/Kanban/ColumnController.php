@@ -217,7 +217,7 @@ final class ColumnController extends Controller
         // Resolve the target board scoped to the user's ownership chain.
         // Cross-owner -> no board found -> 404.
         $targetBoard = KanbanBoard::query()
-            ->whereHas('project', function ($q) use ($request): void {
+            ->whereHas('task.project', function ($q) use ($request): void {
                 $q->where('owner_id', $request->user()->id);
             })
             ->whereKey($targetBoardId)
@@ -230,7 +230,10 @@ final class ColumnController extends Controller
         // Same project? If not, refuse as 404 to keep the existence-leak
         // contract uniform — the move would orphan the column's cards
         // (Batch 4) under a different project_ownership chain.
-        if ($targetBoard->project_id !== $board->project_id) {
+        // After commit 8 we read project_id off the board's task
+        // relationship because `kanban_boards.project_id` is gone.
+        if ($targetBoard->task === null || $board->task === null
+            || $targetBoard->task->project_id !== $board->task->project_id) {
             throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$targetBoardId]);
         }
 

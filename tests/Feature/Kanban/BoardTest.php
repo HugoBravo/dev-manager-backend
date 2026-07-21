@@ -38,7 +38,7 @@ it('returns 401 on every board endpoint without a bearer token', function (strin
 it('lists boards of an owned project', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    KanbanBoard::factory()->for($project, 'project')->count(3)->create();
+    KanbanBoard::factory()->forProject($project)->count(3)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
         ->getJson(kanbanPrefix($project).'/boards')
@@ -54,7 +54,7 @@ it('lists boards of an owned project', function (): void {
 it('returns a paginated 25-per-page list of boards', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    KanbanBoard::factory()->for($project, 'project')->count(30)->create();
+    KanbanBoard::factory()->forProject($project)->count(30)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
         ->getJson(kanbanPrefix($project).'/boards')
@@ -68,9 +68,10 @@ it('returns a paginated 25-per-page list of boards', function (): void {
 it('creates a board in an owned project with 201', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
+    $task = Task::factory()->default()->create(['project_id' => $project->id]);
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson(kanbanPrefix($project).'/boards', [
+        ->postJson("/api/v1/projects/{$project->id}/tasks/{$task->id}/kanban/boards", [
             'name' => 'Sprint 1',
         ])
         ->assertCreated();
@@ -80,7 +81,8 @@ it('creates a board in an owned project with 201', function (): void {
 
     $board = KanbanBoard::query()->findOrFail($id);
     expect($board->name)->toBe('Sprint 1')
-        ->and($board->project_id)->toBe($project->id)
+        ->and($board->task_id)->toBe($task->id)
+        ->and($board->task->project_id)->toBe($project->id)
         ->and($board->archived_at)->toBeNull()
         ->and($board->position)->toBeString();
 });
@@ -120,7 +122,7 @@ it('returns 404 when listing boards of a project the user does not own', functio
 it('shows a board to the project owner', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->getJson(kanbanPrefix($project)."/boards/{$board->id}")
@@ -133,7 +135,7 @@ it('returns 404 when a non-owner fetches a board (no existence leak)', function 
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($stranger, 'sanctum')
         ->getJson(kanbanPrefix($project)."/boards/{$board->id}")
@@ -146,7 +148,7 @@ it('returns 404 when fetching a board of a project the user does not own even if
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $ownedProject = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($ownedProject, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($ownedProject)->create();
     $strangerProject = Project::factory()->forOwner($stranger)->create();
 
     $this->actingAs($stranger, 'sanctum')
@@ -157,7 +159,7 @@ it('returns 404 when fetching a board of a project the user does not own even if
 it('updates a boards name for the project owner', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->patchJson(kanbanPrefix($project)."/boards/{$board->id}", [
@@ -175,7 +177,7 @@ it('writes a renamed audit row when board name changes', function (): void {
     // PATCH /boards/{board}, carrying `old_name` + `new_name` in the payload.
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create([
+    $board = KanbanBoard::factory()->forProject($project)->create([
         'name' => 'Original',
     ]);
 
@@ -212,7 +214,7 @@ it('does NOT write a renamed audit row when the new name equals the current name
     // current name back is the only "change without change" path.
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create([
+    $board = KanbanBoard::factory()->forProject($project)->create([
         'name' => 'Stable',
     ]);
 
@@ -232,7 +234,7 @@ it('returns 404 when a non-owner updates a board', function (): void {
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($stranger, 'sanctum')
         ->patchJson(kanbanPrefix($project)."/boards/{$board->id}", [
@@ -246,7 +248,7 @@ it('returns 404 when a non-owner updates a board', function (): void {
 it('rejects update with name longer than 100 chars', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->patchJson(kanbanPrefix($project)."/boards/{$board->id}", [
@@ -259,7 +261,7 @@ it('rejects update with name longer than 100 chars', function (): void {
 it('deletes an empty board with 204 (soft-delete: row stays, deleted_at is set)', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}")
@@ -278,7 +280,7 @@ it('returns 404 when GET-ting a soft-deleted board', function (): void {
     // leak the existence of a trashed board to API callers.
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}")
@@ -299,7 +301,7 @@ it('returns 409 when destroying a board that has columns (with cards under it)',
     // the next test.
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     // Stub BoardPolicy::delete to return false: controller treats that as
     // "non-empty" and throws BoardHasContentsException -> 409.
@@ -331,7 +333,7 @@ it('returns 409 with a typed `board_has_contents` code in the response body', fu
     // the frontend can switch on. Independent test from the destroy-flow above.
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->app->bind(
         KanbanBoardPolicy::class,
@@ -355,7 +357,7 @@ it('returns 404 when a non-owner deletes a board', function (): void {
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($stranger, 'sanctum')
         ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}")
@@ -367,7 +369,7 @@ it('returns 404 when a non-owner deletes a board', function (): void {
 it('archives a board for the project owner', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
         ->postJson(kanbanPrefix($project)."/boards/{$board->id}/archive")
@@ -392,7 +394,7 @@ it('archives a board for the project owner', function (): void {
 it('archive is a toggle: a second archive call on an already-archived board clears archived_at and records `unarchived`', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->postJson(kanbanPrefix($project)."/boards/{$board->id}/archive")
@@ -421,7 +423,7 @@ it('returns 404 when a non-owner archives a board', function (): void {
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($stranger, 'sanctum')
         ->postJson(kanbanPrefix($project)."/boards/{$board->id}/archive")
@@ -434,9 +436,9 @@ it('reorders boards and persists the new ordering on a second fetch', function (
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
 
-    $b1 = KanbanBoard::factory()->for($project, 'project')->create();
-    $b2 = KanbanBoard::factory()->for($project, 'project')->create();
-    $b3 = KanbanBoard::factory()->for($project, 'project')->create();
+    $b1 = KanbanBoard::factory()->forProject($project)->create();
+    $b2 = KanbanBoard::factory()->forProject($project)->create();
+    $b3 = KanbanBoard::factory()->forProject($project)->create();
 
     // New order: b3, b1, b2.
     $this->actingAs($owner, 'sanctum')
@@ -474,8 +476,8 @@ it('returns 404 when a non-owner reorders boards', function (): void {
     $owner = User::factory()->create();
     $stranger = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $b1 = KanbanBoard::factory()->for($project, 'project')->create();
-    $b2 = KanbanBoard::factory()->for($project, 'project')->create();
+    $b1 = KanbanBoard::factory()->forProject($project)->create();
+    $b2 = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($stranger, 'sanctum')
         ->postJson(kanbanPrefix($project).'/boards/reorder', [
@@ -487,12 +489,12 @@ it('returns 404 when a non-owner reorders boards', function (): void {
 it('rejects reorder payload with ids from another project', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $b1 = KanbanBoard::factory()->for($project, 'project')->create();
-    $b2 = KanbanBoard::factory()->for($project, 'project')->create();
+    $b1 = KanbanBoard::factory()->forProject($project)->create();
+    $b2 = KanbanBoard::factory()->forProject($project)->create();
 
     // Foreign project board owned by the same user but different project.
     $otherProject = Project::factory()->forOwner($owner)->create();
-    $foreignBoard = KanbanBoard::factory()->for($otherProject, 'project')->create();
+    $foreignBoard = KanbanBoard::factory()->forProject($otherProject)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->postJson(kanbanPrefix($project).'/boards/reorder', [
@@ -505,8 +507,8 @@ it('rejects reorder payload with ids from another project', function (): void {
 it('rejects reorder payload with duplicate ids', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $b1 = KanbanBoard::factory()->for($project, 'project')->create();
-    $b2 = KanbanBoard::factory()->for($project, 'project')->create();
+    $b1 = KanbanBoard::factory()->forProject($project)->create();
+    $b2 = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->postJson(kanbanPrefix($project).'/boards/reorder', [
@@ -546,7 +548,7 @@ it('exposes the resource shape with id, task_id, embedded task, name, position, 
 it('caps board position strings at 1024 bytes', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create([
+    $board = KanbanBoard::factory()->forProject($project)->create([
         'position' => str_repeat('z', 1024),
     ]);
 
@@ -576,8 +578,8 @@ it('rejects 422 name_taken on case-insensitive duplicate create', function (): v
 it('rejects 422 name_taken on rename to existing name (case-insensitive)', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $b1 = KanbanBoard::factory()->for($project, 'project')->create(['name' => 'Sprint 1']);
-    KanbanBoard::factory()->for($project, 'project')->create(['name' => 'Sprint 2']);
+    $b1 = KanbanBoard::factory()->forProject($project)->create(['name' => 'Sprint 1']);
+    KanbanBoard::factory()->forProject($project)->create(['name' => 'Sprint 2']);
 
     $response = $this->actingAs($owner, 'sanctum')
         ->patchJson(kanbanPrefix($project)."/boards/{$b1->id}", [

@@ -182,7 +182,7 @@ final class BoardBulkOperationsController extends Controller
             return KanbanBoard::query()
                 ->whereKey($id)
                 ->where('task_id', $task->id)
-                ->whereHas('project', function ($q) use ($project): void {
+                ->whereHas('task.project', function ($q) use ($project): void {
                     $q->whereKey($project->getKey());
                 })
                 ->firstOrFail();

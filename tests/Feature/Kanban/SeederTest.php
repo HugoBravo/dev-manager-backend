@@ -43,17 +43,17 @@ it('seeds the demo user, project, board, columns, cards, comments and attachment
     expect($project)->not->toBeNull();
 
     // 1 board, 3 columns, 5 cards in this dataset.
-    expect(KanbanBoard::query()->where('project_id', $project?->id)->count())->toBe(1);
+    expect(KanbanBoard::query()->whereHas('task', fn ($q) => $q->where('project_id', $project->id))->count())->toBe(1);
     expect(KanbanColumn::query()->whereIn(
         'board_id',
-        KanbanBoard::query()->where('project_id', $project?->id)->pluck('id')->all()
+        KanbanBoard::query()->whereHas('task', fn ($q) => $q->where('project_id', $project->id))->pluck('id')->all()
     )->count())->toBe(3);
 
     $cardCount = KanbanCard::query()->whereIn(
         'column_id',
         KanbanColumn::query()->whereIn(
             'board_id',
-            KanbanBoard::query()->where('project_id', $project?->id)->pluck('id')->all()
+            KanbanBoard::query()->whereHas('task', fn ($q) => $q->where('project_id', $project->id))->pluck('id')->all()
         )->pluck('id')->all()
     )->count();
     expect($cardCount)->toBe(5);
@@ -65,7 +65,7 @@ it('seeds the demo user, project, board, columns, cards, comments and attachment
             'column_id',
             KanbanColumn::query()->whereIn(
                 'board_id',
-                KanbanBoard::query()->where('project_id', $project?->id)->pluck('id')->all()
+                KanbanBoard::query()->whereHas('task', fn ($q) => $q->where('project_id', $project->id))->pluck('id')->all()
             )->pluck('id')->all()
         )->pluck('id')->all()
     )->count();
@@ -77,7 +77,7 @@ it('seeds the demo user, project, board, columns, cards, comments and attachment
             'column_id',
             KanbanColumn::query()->whereIn(
                 'board_id',
-                KanbanBoard::query()->where('project_id', $project?->id)->pluck('id')->all()
+                KanbanBoard::query()->whereHas('task', fn ($q) => $q->where('project_id', $project->id))->pluck('id')->all()
             )->pluck('id')->all()
         )->pluck('id')->all()
     )->count();
@@ -96,17 +96,17 @@ it('is idempotent — re-running the seeder does not duplicate rows', function (
     expect($project)->not->toBeNull();
 
     // Counts are unchanged after a second pass.
-    expect(KanbanBoard::query()->where('project_id', $project?->id)->count())->toBe(1);
+    expect(KanbanBoard::query()->whereHas('task', fn ($q) => $q->where('project_id', $project->id))->count())->toBe(1);
     expect(KanbanColumn::query()->whereIn(
         'board_id',
-        KanbanBoard::query()->where('project_id', $project?->id)->pluck('id')->all()
+        KanbanBoard::query()->whereHas('task', fn ($q) => $q->where('project_id', $project->id))->pluck('id')->all()
     )->count())->toBe(3);
 
     $cardCount = KanbanCard::query()->whereIn(
         'column_id',
         KanbanColumn::query()->whereIn(
             'board_id',
-            KanbanBoard::query()->where('project_id', $project?->id)->pluck('id')->all()
+            KanbanBoard::query()->whereHas('task', fn ($q) => $q->where('project_id', $project->id))->pluck('id')->all()
         )->pluck('id')->all()
     )->count();
     expect($cardCount)->toBe(5);

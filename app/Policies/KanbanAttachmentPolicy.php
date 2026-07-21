@@ -40,7 +40,7 @@ final class KanbanAttachmentPolicy
      */
     public function view(User $user, KanbanAttachment $attachment): bool
     {
-        return $user->can('view', $attachment->card->column->board->project);
+        return $user->can('view', $attachment->card->column->board->task->project);
     }
 
     /**
@@ -50,7 +50,7 @@ final class KanbanAttachmentPolicy
      */
     public function update(User $user, KanbanAttachment $attachment): bool
     {
-        return $user->can('view', $attachment->card->column->board->project);
+        return $user->can('view', $attachment->card->column->board->task->project);
     }
 
     /**
@@ -60,6 +60,6 @@ final class KanbanAttachmentPolicy
      */
     public function delete(User $user, KanbanAttachment $attachment): bool
     {
-        return $user->can('view', $attachment->card->column->board->project);
+        return $user->can('view', $attachment->card->column->board->task->project);
     }
 }

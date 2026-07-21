@@ -86,11 +86,10 @@ final class BoardController extends Controller
         $projectModel = $this->resolveOwnedProject($request, $project);
 
         try {
-            $board = DB::transaction(function () use ($request, $projectModel, $task): KanbanBoard {
+            $board = DB::transaction(function () use ($request, $task): KanbanBoard {
                 $nextPosition = $this->nextPositionForTask($task);
 
                 return KanbanBoard::query()->create([
-                    'project_id' => $projectModel->id,
                     'task_id' => $task->id,
                     'name' => $request->validated('name'),
                     'position' => $nextPosition,
@@ -101,11 +100,10 @@ final class BoardController extends Controller
                 $this->rebalanceTaskPositions($task);
             });
 
-            $board = DB::transaction(function () use ($request, $projectModel, $task): KanbanBoard {
+            $board = DB::transaction(function () use ($request, $task): KanbanBoard {
                 $nextPosition = $this->nextPositionForTask($task);
 
                 return KanbanBoard::query()->create([
-                    'project_id' => $projectModel->id,
                     'task_id' => $task->id,
                     'name' => $request->validated('name'),
                     'position' => $nextPosition,
@@ -248,11 +246,10 @@ final class BoardController extends Controller
         $finalName = $desiredName !== '' ? $desiredName : "{$sourceName} (Copy)";
         $finalName = $this->resolveCloneNameCollision($projectModel, $task, $finalName);
 
-        $clone = DB::transaction(function () use ($projectModel, $board, $task, $finalName): KanbanBoard {
+        $clone = DB::transaction(function () use ($board, $task, $finalName): KanbanBoard {
             $position = $this->nextPositionForTask($task);
 
             $new = KanbanBoard::query()->create([
-                'project_id' => $projectModel->id,
                 'task_id' => $task->id,
                 'name' => $finalName,
                 'position' => $position,

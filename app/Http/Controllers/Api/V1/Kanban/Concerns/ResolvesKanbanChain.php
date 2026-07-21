@@ -59,7 +59,11 @@ trait ResolvesKanbanChain
             return;
         }
 
-        if ($board->project_id !== $project->id) {
+        // No `{task}` in the URL chain (a legacy / pre-refactor call site).
+        // After commit 8 the `project_id` column is gone, so we route
+        // through the task relationship for the chain check.
+        $boardTask = $board->task;
+        if ($boardTask === null || $boardTask->project_id !== $project->id) {
             throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$board->id]);
         }
     }

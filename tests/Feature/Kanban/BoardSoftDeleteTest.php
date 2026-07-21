@@ -24,7 +24,7 @@ it('returns 401 on every soft-delete / restore / trash endpoint without a bearer
 it('soft-deletes an empty board and excludes it from default index', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}")
@@ -50,7 +50,7 @@ it('returns 409 board_has_contents when soft-deleting a non-empty board', functi
     // the assertion that deleted_at is null is the contract we lock in here.
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->app->bind(
         KanbanBoardPolicy::class,
@@ -82,7 +82,7 @@ it('returns 409 board_has_contents when soft-deleting a non-empty board', functi
 it('restores a soft-deleted board within the restore window', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     // Trashed first so we exercise the restore path.
     $this->actingAs($owner, 'sanctum')
@@ -116,7 +116,7 @@ it('restores a soft-deleted board within the restore window', function (): void 
 it('returns 422 not_trashed when restoring an active board', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $board = KanbanBoard::factory()->forProject($project)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
         ->postJson(kanbanPrefix($project)."/boards/{$board->id}/restore")
@@ -130,11 +130,11 @@ it('lists trashed boards paginated newest-first', function (): void {
     $project = Project::factory()->forOwner($owner)->create();
 
     // Three boards trashed at controlled timestamps so deleted_at order is fixed.
-    $old = KanbanBoard::factory()->for($project, 'project')->create();
-    $mid = KanbanBoard::factory()->for($project, 'project')->create();
-    $new = KanbanBoard::factory()->for($project, 'project')->create();
+    $old = KanbanBoard::factory()->forProject($project)->create();
+    $mid = KanbanBoard::factory()->forProject($project)->create();
+    $new = KanbanBoard::factory()->forProject($project)->create();
     // One active board that must NOT appear in trashed.
-    $active = KanbanBoard::factory()->for($project, 'project')->create();
+    $active = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
         ->deleteJson(kanbanPrefix($project)."/boards/{$old->id}")

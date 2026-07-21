@@ -30,17 +30,17 @@ final class KanbanCardPolicy
 
     public function view(User $user, KanbanCard $card): bool
     {
-        return $user->can('view', $card->column->board->project);
+        return $user->can('view', $card->column->board->task->project);
     }
 
     public function update(User $user, KanbanCard $card): bool
     {
-        return $user->can('view', $card->column->board->project);
+        return $user->can('view', $card->column->board->task->project);
     }
 
     public function delete(User $user, KanbanCard $card): bool
     {
-        return $user->can('view', $card->column->board->project);
+        return $user->can('view', $card->column->board->task->project);
     }
 
     /**
@@ -48,12 +48,12 @@ final class KanbanCardPolicy
      */
     public function archive(User $user, KanbanCard $card): bool
     {
-        return $user->can('view', $card->column->board->project);
+        return $user->can('view', $card->column->board->task->project);
     }
 
     public function restore(User $user, KanbanCard $card): bool
     {
-        return $user->can('view', $card->column->board->project);
+        return $user->can('view', $card->column->board->task->project);
     }
 
     /**
@@ -63,7 +63,7 @@ final class KanbanCardPolicy
      */
     public function move(User $user, KanbanCard $card): bool
     {
-        return $user->can('view', $card->column->board->project);
+        return $user->can('view', $card->column->board->task->project);
     }
 
     /**
@@ -72,6 +72,6 @@ final class KanbanCardPolicy
      */
     public function reorder(User $user, KanbanCard $card): bool
     {
-        return $user->can('view', $card->column->board->project);
+        return $user->can('view', $card->column->board->task->project);
     }
 }
