@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\SessionController;
+use App\Http\Resources\UserResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -15,13 +16,7 @@ Route::get('/user', function (Request $request) {
         return response()->json(['message' => 'Unauthenticated.'], 401);
     }
 
-    return response()->json([
-        'data' => [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-        ],
-    ]);
+    return response()->json((new UserResource($user))->resolve());
 })->middleware('auth:sanctum');
 
 Route::post('/auth/register', [RegisterController::class, 'store'])

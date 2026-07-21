@@ -81,15 +81,31 @@ it('returns 401 when accessing /api/user with malformed bearer', function (): vo
         ->assertUnauthorized();
 });
 
-it('returns 200 with user envelope on /api/user with valid bearer', function (): void {
-    $user = User::factory()->create();
+it('returns the canonical user resource with a strict boolean admin role', function (bool $isAdmin): void {
+    $user = User::factory()->create(['is_admin' => $isAdmin]);
 
-    $this->withToken(bearerFor($user))
+    $response = $this->withToken(bearerFor($user))
         ->getJson('/api/user')
         ->assertOk()
-        ->assertJsonPath('data.id', $user->id)
-        ->assertJsonPath('data.email', $user->email);
-});
+        ->assertExactJson([
+            'data' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'email_verified_at' => $user->email_verified_at?->toIso8601String(),
+                'is_admin' => $isAdmin,
+                'created_at' => $user->created_at?->toIso8601String(),
+                'updated_at' => $user->updated_at?->toIso8601String(),
+            ],
+        ]);
+
+    expect($response->json('data.is_admin'))
+        ->toBe($isAdmin)
+        ->toBeBool();
+})->with([
+    'admin' => [true],
+    'non-admin' => [false],
+]);
 
 it('logs out via bearer token and returns 204', function (): void {
     $user = User::factory()->create();
