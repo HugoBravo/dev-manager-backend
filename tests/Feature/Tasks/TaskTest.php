@@ -153,3 +153,58 @@ it('returns a conflict when archiving a task with an active board', function ():
         ->assertJsonPath('code', 'task_has_active_boards')
         ->assertJsonPath('task_id', $task->id);
 });
+
+/*
+|--------------------------------------------------------------------------
+| REQ-TESTS-1 scenario matrix — verify CRITICAL #4
+|--------------------------------------------------------------------------
+|
+| These three scenarios are mandatory per REQ-TESTS-1; the verify report
+| observed they were missing from TaskTest. Pre-fix behavior already
+| enforces each contract correctly (Slug unique rule in StoreTaskRequest,
+| Route::bind('task' | 'project') ownership scoping in AppServiceProvider),
+| so the tests assert the documented contract end-to-end at the HTTP
+| boundary — they are GREEN from day one and exist to lock the matrix.
+|
+*/
+
+it('returns 422 on a slug collision within the same project (REQ-TESTS-1)', function (): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+    Task::factory()->create([
+        'project_id' => $project->id,
+        'name' => 'Existing Task',
+        'slug' => 'duplicate-slug',
+    ]);
+
+    Sanctum::actingAs($owner);
+
+    $response = postJson("/api/v1/projects/{$project->id}/tasks", [
+        'name' => 'Brand-new Task',
+        'slug' => 'duplicate-slug',
+    ])->assertUnprocessable();
+
+    $response->assertJsonValidationErrors(['slug']);
+});
+
+it('returns 404 when user B reads user A task under user A project (REQ-TESTS-1 / no existence leak)', function (): void {
+    $owner = User::factory()->create();
+    $stranger = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+    $task = Task::factory()->create(['project_id' => $project->id]);
+
+    Sanctum::actingAs($stranger);
+
+    getJson("/api/v1/projects/{$project->id}/tasks/{$task->id}")
+        ->assertNotFound();
+});
+
+it('returns 404 when the parent project in the URL does not exist (REQ-TESTS-1)', function (): void {
+    $owner = User::factory()->create();
+    Sanctum::actingAs($owner);
+
+    // 99999 is unbound on a fresh DB — the {project} Route::bind
+    // closure returns null and the controller renders 404.
+    getJson('/api/v1/projects/99999/tasks/1')
+        ->assertNotFound();
+});
