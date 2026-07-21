@@ -97,6 +97,38 @@ class AppServiceProvider extends ServiceProvider
             return $project;
         });
 
+        // Task binding is scoped to both the authenticated owner and the
+        // project segment in the URL, preventing cross-project task leaks.
+        Route::bind('task', function (string $value): Task {
+            $userId = request()->user()?->id;
+            $project = request()->route('project');
+
+            if ($userId === null || $project === null) {
+                throw (new ModelNotFoundException)->setModel(Task::class, [$value]);
+            }
+
+            $task = Task::query()
+                ->whereKey($value)
+                ->whereHas('project', function ($query) use ($project, $userId): void {
+                    $query->where('owner_id', $userId);
+
+                    if ($project instanceof Project) {
+                        $query->whereKey($project->getKey());
+                    } elseif (is_numeric($project)) {
+                        $query->whereKey((int) $project);
+                    } else {
+                        $query->where('slug', $project);
+                    }
+                })
+                ->first();
+
+            if ($task === null) {
+                throw (new ModelNotFoundException)->setModel(Task::class, [$value]);
+            }
+
+            return $task;
+        });
+
         // Owner-scoped chokepoint (Batch 7 PHPDoc note):
         //
         // Every `Route::bind(...)` closure below walks the ownership chain
