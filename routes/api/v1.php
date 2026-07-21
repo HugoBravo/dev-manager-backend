@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\Kanban\CommentController;
 use App\Http\Controllers\Api\V1\Kanban\KanbanLabelController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\SecretController;
+use App\Http\Controllers\Api\V1\Tasks\TaskController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -38,6 +39,26 @@ Route::middleware(['auth:sanctum', 'throttle:api'])
     ->prefix('v1')
     ->group(function (): void {
         Route::apiResource('projects', ProjectController::class);
+
+        Route::prefix('projects/{project}/tasks')->group(function (): void {
+            Route::get('', [TaskController::class, 'index'])
+                ->name('api.v1.projects.tasks.index');
+
+            Route::post('', [TaskController::class, 'store'])
+                ->name('api.v1.projects.tasks.store');
+
+            Route::get('{task}', [TaskController::class, 'show'])
+                ->name('api.v1.projects.tasks.show');
+
+            Route::patch('{task}', [TaskController::class, 'update'])
+                ->name('api.v1.projects.tasks.update');
+
+            Route::post('{task}/archive', [TaskController::class, 'archive'])
+                ->name('api.v1.projects.tasks.archive');
+
+            Route::post('{task}/restore', [TaskController::class, 'restore'])
+                ->name('api.v1.projects.tasks.restore');
+        });
 
         // Nested under /projects/{project}/kanban so the auth chain is owned
         // project first, then board. The reorder route MUST come BEFORE the
