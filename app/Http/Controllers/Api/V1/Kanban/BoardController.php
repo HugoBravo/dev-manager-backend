@@ -57,6 +57,11 @@ final class BoardController extends Controller
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
 
+        // REQ-MIGRATION-2 (verify CRITICAL #2): archived tasks hide nested
+        // resources by default. Throws ModelNotFoundException (404) unless
+        // the caller passes `?include_archived=1`.
+        $this->ensureNotArchivedTask($request, $task, $task->getKey());
+
         // R1 gate: archived projects filter nested resources by default.
         if (! $this->includeArchived($request) && $projectModel->archived_at !== null) {
             return BoardResource::collection(

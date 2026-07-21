@@ -53,6 +53,11 @@ final class CommentController extends Controller
         $this->ensureColumnBelongsToBoard($column, $board);
         $this->ensureCardBelongsToColumn($card, $column);
 
+        // REQ-MIGRATION-2 (verify CRITICAL #2): archived tasks hide nested
+        // resources by default. Throws ModelNotFoundException (404) unless
+        // the caller passes `?include_archived=1`.
+        $this->ensureNotArchivedTask($request, $task, $task->getKey());
+
         if (! $this->includeArchived($request) && $projectModel->archived_at !== null) {
             return CommentResource::collection(
                 KanbanComment::query()->whereRaw('1 = 0')->paginate(25)
