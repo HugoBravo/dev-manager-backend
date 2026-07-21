@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Schema;
  * logic in Kanban\BoardController::destroy uses an explicit columns-table existence
  * check (lazy table inspection) until Batch 3 lands the relationship.
  */
-#[Fillable(['project_id', 'name', 'position', 'archived_at'])]
+#[Fillable(['project_id', 'task_id', 'name', 'position', 'archived_at'])]
 class KanbanBoard extends Model
 {
     /** @use HasFactory<BoardFactory> */
@@ -53,6 +53,14 @@ class KanbanBoard extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * The task that owns this board during the task migration window.
+     */
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(Task::class);
     }
 
     /**

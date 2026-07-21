@@ -144,7 +144,7 @@ it('returns a conflict when archiving a task with an active board', function ():
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
     $task = Task::factory()->create(['project_id' => $project->id]);
-    KanbanBoard::factory()->forProject($project)->create();
+    KanbanBoard::factory()->forTask($task)->create();
 
     Sanctum::actingAs($owner);
 

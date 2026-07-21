@@ -6,7 +6,9 @@ namespace Database\Factories;
 
 use App\Models\KanbanBoard;
 use App\Models\Project;
+use App\Models\Task;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * @extends Factory<KanbanBoard>
@@ -25,6 +27,28 @@ class KanbanBoardFactory extends Factory
      */
     private static int $seedCounter = 0;
 
+    public function configure(): static
+    {
+        return $this->afterMaking(function (KanbanBoard $board): void {
+            if (! Schema::hasColumn('kanban_boards', 'task_id') || $board->task_id !== null) {
+                return;
+            }
+
+            $task = Task::query()->firstOrCreate(
+                [
+                    'project_id' => $board->project_id,
+                    'slug' => 'default',
+                ],
+                [
+                    'name' => 'Default',
+                    'status' => 'open',
+                ],
+            );
+
+            $board->task_id = $task->id;
+        });
+    }
+
     public function definition(): array
     {
         $seed = self::$seedCounter++;
@@ -41,6 +65,17 @@ class KanbanBoardFactory extends Factory
             'position' => 'a'.$lex,
             'archived_at' => null,
         ];
+    }
+
+    /**
+     * Indicate the board belongs to a specific task.
+     */
+    public function forTask(Task $task): static
+    {
+        return $this->state(fn (): array => [
+            'project_id' => $task->project_id,
+            'task_id' => $task->id,
+        ]);
     }
 
     /**
