@@ -11,6 +11,7 @@ use App\Models\KanbanColumn;
 use App\Models\KanbanComment;
 use App\Models\Project;
 use App\Models\Secret;
+use App\Models\Task;
 use App\Models\User;
 use App\Policies\KanbanAttachmentPolicy;
 use App\Policies\KanbanBoardPolicy;
@@ -19,6 +20,7 @@ use App\Policies\KanbanColumnPolicy;
 use App\Policies\KanbanCommentPolicy;
 use App\Policies\ProjectPolicy;
 use App\Policies\SecretPolicy;
+use App\Policies\TaskPolicy;
 use App\Policies\UserPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -61,6 +63,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(KanbanComment::class, KanbanCommentPolicy::class);
         Gate::policy(KanbanAttachment::class, KanbanAttachmentPolicy::class);
         Gate::policy(Secret::class, SecretPolicy::class);
+        Gate::policy(Task::class, TaskPolicy::class);
         Gate::policy(User::class, UserPolicy::class);
 
         // Ownership-scoped route binding for `{project}`. URI segments may
