@@ -1,0 +1,46 @@
+meta {
+  name: 02 - create task
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/tasks
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearerToken}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Refactor checkout",
+    "slug": "refactor-checkout",
+    "description": "Move the cart into a separate service.",
+    "status": "in_progress"
+  }
+}
+
+docs {
+  # Create a task under a project. Server-generated `slug` if omitted.
+
+  Expected: 201, `data.task` shape per TaskResource.
+}
+
+script:post-response {
+  try {
+    const body = res.getBody();
+    if (body && body.data && body.data.id) {
+      bru.setEnvVar("taskId", String(body.data.id));
+    }
+  } catch (e) {
+    // ignore
+  }
+}

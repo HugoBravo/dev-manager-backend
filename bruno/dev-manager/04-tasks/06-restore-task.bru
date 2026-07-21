@@ -1,0 +1,25 @@
+meta {
+  name: 06 - restore task
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/tasks/{{taskId}}/restore
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearerToken}}
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  # Restore an archived task. No 409 here — restore is always allowed.
+
+  Expected: 200, archived_at becomes null.
+}

@@ -1,0 +1,33 @@
+meta {
+  name: 04 - update task
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/tasks/{{taskId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearerToken}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Refactor checkout (rev 2)",
+    "status": "done"
+  }
+}
+
+docs {
+  # Partial update on a task.
+
+  Expected: 200, `data.task` shape per TaskResource.
+}

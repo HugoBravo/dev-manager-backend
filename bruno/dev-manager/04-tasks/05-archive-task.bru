@@ -1,0 +1,26 @@
+meta {
+  name: 05 - archive task
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/tasks/{{taskId}}/archive
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearerToken}}
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  # Archive a task. 409 if any non-archived board is under it
+  # (matches kanban v1 board-non-empty-delete shape, via Gate::inspect).
+
+  Expected: 200, archived_at populated.
+}

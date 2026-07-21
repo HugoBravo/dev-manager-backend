@@ -1,0 +1,41 @@
+meta {
+  name: 01 - list project tasks
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/tasks
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearerToken}}
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  # List tasks under a project (paginated 25/page).
+
+  Backend behavior (`kanban-per-task`, commit 8 final schema):
+  - Returns `TaskResource` collection scoped to `projectId`.
+  - `?include_archived=1` includes archived tasks (default hides them).
+  - 404 on cross-owner request via `Route::bind('task', ...)`.
+
+  Expected: 200, `data[]` shape per TaskResource.
+}
+
+script:post-response {
+  try {
+    const body = res.getBody();
+    if (body && body.data && body.data[0] && body.data[0].data) {
+      bru.setEnvVar("taskId", String(body.data[0].data.id));
+    }
+  } catch (e) {
+    // ignore
+  }
+}

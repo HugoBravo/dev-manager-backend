@@ -1,0 +1,44 @@
+meta {
+  name: 02 - create board
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/tasks/{{taskId}}/kanban/boards
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearerToken}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Sprint 14"
+  }
+}
+
+docs {
+  # Create a board under the task. Position is auto-assigned via the
+  # `App\ValueObjects\Kanban\Position` fractional-indexing VO.
+
+  Expected: 201, BoardResource with `task_id` + embedded `task` object.
+}
+
+script:post-response {
+  try {
+    const body = res.getBody();
+    if (body && body.data && body.data.id) {
+      bru.setEnvVar("boardId", String(body.data.id));
+    }
+  } catch (e) {
+    // ignore
+  }
+}

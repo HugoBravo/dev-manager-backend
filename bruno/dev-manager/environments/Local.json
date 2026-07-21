@@ -8,6 +8,11 @@
     "registerEmail": "jane.register@example.com",
     "registerPassword": "password123",
     "bearerToken": "",
-    "registerBearerToken": ""
+    "registerBearerToken": "",
+    "projectId": "",
+    "taskId": "",
+    "boardId": "",
+    "columnId": "",
+    "cardId": ""
   }
 }
