@@ -43,17 +43,17 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             foreach ($nameError as $message) {
-                if ($message === 'A board with that name already exists in this project.') {
-                    // Recover the project id from the route so the response
+                if ($message === 'A board with that name already exists in this task.') {
+                    // Recover the task id from the route so the response
                     // shape stays consistent with the controller-level path.
-                    $project = $request->route('project');
-                    $projectId = is_object($project) && method_exists($project, 'getKey')
-                        ? (int) $project->getKey()
+                    $task = $request->route('task');
+                    $taskId = is_object($task) && method_exists($task, 'getKey')
+                        ? (int) $task->getKey()
                         : 0;
 
                     $name = (string) $request->input('name', '');
 
-                    throw new BoardAlreadyExistsException($name, $projectId);
+                    throw new BoardAlreadyExistsException($name, $taskId);
                 }
             }
 

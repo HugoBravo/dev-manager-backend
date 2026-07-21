@@ -9,7 +9,7 @@ use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
 /**
- * Project-scoped, case-insensitive, soft-delete-aware uniqueness check for
+ * Task-scoped, case-insensitive, soft-delete-aware uniqueness check for
  * `kanban_boards.name`. The functional expression `LOWER(name)` makes the
  * comparison case-insensitive in SQL (works on both pgsql and sqlite), and
  * `WHERE deleted_at IS NULL` lets a recycled name succeed when the previous
@@ -22,23 +22,25 @@ use Illuminate\Contracts\Validation\ValidationRule;
  *     `name = LOWER(?)` projection at the same time.
  *   - The case-insensitive comparison must happen server-side because the
  *     underlying SQL indexes `LOWER(name)` (see the migration in
- *     `2026_07_11_010002_add_unique_index_board_name_active`).
+ *     `2026_07_11_010002_add_unique_index_board_name_active` for the legacy
+ *     project_id-scoped index, and the swap migration for the task_id one).
  *
  * @see \Database\Migrations\2026_07_11_010002_add_unique_index_board_name_active
+ * @see \Database\Migrations\2026_07_21_000000_swap_active_board_name_unique_to_task_id
  */
 final class UniqueActiveBoardName implements ValidationRule
 {
     /**
-     * @param  int  $projectId  The owning project id from the request route.
+     * @param  int  $taskId  The owning task id from the request route.
      * @param  int|null  $ignoreBoardId  The board id to ignore (used on update).
      */
     public function __construct(
-        private readonly int $projectId,
+        private readonly int $taskId,
         private readonly ?int $ignoreBoardId = null,
     ) {}
 
     /**
-     * Run the SQL check: any row in (project_id, LOWER(name)) — excluding
+     * Run the SQL check: any row in (task_id, LOWER(name)) — excluding
      * $ignoreBoardId AND any soft-deleted row — fails the rule.
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
@@ -48,7 +50,7 @@ final class UniqueActiveBoardName implements ValidationRule
         }
 
         $query = KanbanBoard::query()
-            ->where('project_id', $this->projectId)
+            ->where('task_id', $this->taskId)
             ->whereRaw('LOWER(name) = ?', [mb_strtolower($value)])
             ->whereNull('deleted_at');
 
@@ -57,7 +59,7 @@ final class UniqueActiveBoardName implements ValidationRule
         }
 
         if ($query->exists()) {
-            $fail('A board with that name already exists in this project.');
+            $fail('A board with that name already exists in this task.');
         }
     }
 }

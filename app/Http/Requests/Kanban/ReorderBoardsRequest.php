@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Requests\Kanban;
 
 use App\Models\KanbanBoard;
-use App\Models\Project;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -28,14 +27,14 @@ final class ReorderBoardsRequest extends FormRequest
     }
 
     /**
-     * Cross-check that EVERY id belongs to the project named in the URL.
+     * Cross-check that EVERY id belongs to the task named in the URL.
      * Validation must run AFTER the standard rule chain.
      */
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $v): void {
-            $project = $this->route('project');
-            $projectId = $project instanceof Project ? $project->getKey() : (int) $project;
+            $task = $this->route('task');
+            $taskId = is_object($task) && method_exists($task, 'getKey') ? (int) $task->getKey() : (int) $task;
             $ids = (array) $this->input('ordered_ids', []);
 
             if ($ids === []) {
@@ -44,11 +43,11 @@ final class ReorderBoardsRequest extends FormRequest
 
             $count = KanbanBoard::query()
                 ->whereIn('id', $ids)
-                ->where('project_id', $projectId)
+                ->where('task_id', $taskId)
                 ->count();
 
             if ($count !== count($ids)) {
-                $v->errors()->add('ordered_ids', 'Some board ids do not belong to this project.');
+                $v->errors()->add('ordered_ids', 'Some board ids do not belong to this task.');
             }
         });
     }

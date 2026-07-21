@@ -87,7 +87,7 @@ final class BoardController extends Controller
 
         try {
             $board = DB::transaction(function () use ($request, $projectModel, $task): KanbanBoard {
-                $nextPosition = $this->nextPositionForProject($projectModel);
+                $nextPosition = $this->nextPositionForTask($task);
 
                 return KanbanBoard::query()->create([
                     'project_id' => $projectModel->id,
@@ -97,12 +97,12 @@ final class BoardController extends Controller
                 ]);
             });
         } catch (PositionExhaustedException) {
-            DB::transaction(function () use ($projectModel): void {
-                $this->rebalanceProjectPositions($projectModel);
+            DB::transaction(function () use ($task): void {
+                $this->rebalanceTaskPositions($task);
             });
 
             $board = DB::transaction(function () use ($request, $projectModel, $task): KanbanBoard {
-                $nextPosition = $this->nextPositionForProject($projectModel);
+                $nextPosition = $this->nextPositionForTask($task);
 
                 return KanbanBoard::query()->create([
                     'project_id' => $projectModel->id,
@@ -119,12 +119,16 @@ final class BoardController extends Controller
     /**
      * Show one board (cross-owner -> 404 via binding closure).
      * R1: archived project returns 404 unless `?include_archived=1`.
+     * REQ-MIGRATION-2: archived task also returns 404 unless the same flag
+     * is set; the helper runs after the project-level gate so either
+     * archive source is reported accurately.
      */
     public function show(Request $request, Project $project, Task $task, KanbanBoard $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
         $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
+        $this->ensureNotArchivedTask($request, $task, $task->getKey());
 
         return (new BoardResource($board))->response();
     }
@@ -245,7 +249,7 @@ final class BoardController extends Controller
         $finalName = $this->resolveCloneNameCollision($projectModel, $task, $finalName);
 
         $clone = DB::transaction(function () use ($projectModel, $board, $task, $finalName): KanbanBoard {
-            $position = $this->nextPositionForProject($projectModel);
+            $position = $this->nextPositionForTask($task);
 
             $new = KanbanBoard::query()->create([
                 'project_id' => $projectModel->id,
@@ -474,50 +478,46 @@ final class BoardController extends Controller
 
     /**
      * Throw ModelNotFoundException (404) if the binding resolved a board that
-     * does not belong to the project in the URL.
+     * does not belong to the task in the URL. Every kanban route now carries
+     * a `{task}` segment after the kanban-per-task refactor, so the
+     * `task_id` check is the only chain-consistency gate we need here. The
+     * `Route::bind('board', …)` closure already filters by project → owner_id,
+     * and `ResolvesKanbanChain::ensureBoardBelongsToTask` covers the same
+     * gate when controllers compose the trait.
      */
     private function ensureBoardBelongsToProject(KanbanBoard $board, Project $project): void
     {
         $task = request()->route('task');
-        if ($task instanceof Task) {
-            if ($board->task_id !== $task->id) {
-                throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$board->id]);
-            }
-
-            return;
+        if (! $task instanceof Task) {
+            // No {task} route segment — without a task there is no chain to
+            // validate against, but the controller shouldn't have been called
+            // in that configuration. Treat as 404 to fail loudly.
+            throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$board->id]);
         }
 
-        if ($board->project_id !== $project->id) {
+        if ($board->task_id !== $task->id) {
             throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$board->id]);
         }
     }
 
     /**
-     * Compute the next position to append under a project via the
+     * Compute the next position to append under a task via the
      * `Position` value object. Picks the largest existing position and asks
      * `Position::after($rightmost)` for a strictly-greater value within
-     * the 1024-byte cap. Returns `Position::start()` when the project has
+     * the 1024-byte cap. Returns `Position::start()` when the task has
      * no boards.
      *
      * Wrapped by the controller in `DB::transaction` with `lockForUpdate`
      * so concurrent appends cannot race on `rightmost`. Throws
      * `PositionExhaustedException` when the alphabet is saturated; the
-     * controller catches that and triggers `rebalanceProjectPositions`.
+     * controller catches that and triggers `rebalanceTaskPositions`.
      *
      * @throws PositionExhaustedException
      */
-    private function nextPositionForProject(Project $project): string
+    private function nextPositionForTask(Task $task): string
     {
-        $task = request()->route('task');
-        $query = KanbanBoard::query();
-
-        if ($task instanceof Task) {
-            $query->where('task_id', $task->id);
-        } else {
-            $query->where('project_id', $project->id);
-        }
-
-        $rightmost = $query
+        $rightmost = KanbanBoard::query()
+            ->where('task_id', $task->id)
             ->lockForUpdate()
             ->orderByDesc('position')
             ->value('position');
@@ -535,18 +535,10 @@ final class BoardController extends Controller
      * preserved (read in current ordering) and the rebalance produces
      * positions small enough to leave room for many future appends.
      */
-    private function rebalanceProjectPositions(Project $project): void
+    private function rebalanceTaskPositions(Task $task): void
     {
-        $task = request()->route('task');
-        $query = KanbanBoard::query();
-
-        if ($task instanceof Task) {
-            $query->where('task_id', $task->id);
-        } else {
-            $query->where('project_id', $project->id);
-        }
-
-        $boardIds = $query
+        $boardIds = KanbanBoard::query()
+            ->where('task_id', $task->id)
             ->orderBy('position')
             ->orderBy('id')
             ->lockForUpdate()
@@ -554,14 +546,10 @@ final class BoardController extends Controller
             ->all();
 
         foreach ($boardIds as $index => $boardId) {
-            $query = KanbanBoard::query()->whereKey($boardId);
-            if ($task instanceof Task) {
-                $query->where('task_id', $task->id);
-            } else {
-                $query->where('project_id', $project->id);
-            }
-
-            $query->update(['position' => $this->indexedPosition($index)]);
+            KanbanBoard::query()
+                ->whereKey($boardId)
+                ->where('task_id', $task->id)
+                ->update(['position' => $this->indexedPosition($index)]);
         }
     }
 

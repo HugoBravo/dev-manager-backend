@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\KanbanBoard;
 use App\Models\KanbanBoardAuditLog;
 use App\Models\Project;
+use App\Models\Task;
 use App\Models\User;
 use App\Policies\KanbanBoardPolicy;
 use Illuminate\Support\Facades\DB;
@@ -515,18 +516,20 @@ it('rejects reorder payload with duplicate ids', function (): void {
         ->assertJsonValidationErrors(['ordered_ids']);
 });
 
-it('exposes the resource shape with id, name, project_id, position, archived_at, timestamps', function (): void {
+it('exposes the resource shape with id, task_id, embedded task, name, position, archived_at, timestamps', function (): void {
     $owner = User::factory()->create();
     $project = Project::factory()->forOwner($owner)->create();
-    $board = KanbanBoard::factory()->for($project, 'project')->create();
+    $task = Task::factory()->default()->create(['project_id' => $project->id]);
+    $board = KanbanBoard::factory()->forTask($task)->create();
 
-    $this->actingAs($owner, 'sanctum')
-        ->getJson(kanbanPrefix($project)."/boards/{$board->id}")
+    $response = $this->actingAs($owner, 'sanctum')
+        ->getJson("/api/v1/projects/{$project->id}/tasks/{$task->id}/kanban/boards/{$board->id}")
         ->assertOk()
         ->assertJsonStructure([
             'data' => [
                 'id',
-                'project_id',
+                'task_id',
+                'task' => ['id', 'name', 'slug', 'status', 'archived_at'],
                 'name',
                 'position',
                 'archived_at',
@@ -534,6 +537,10 @@ it('exposes the resource shape with id, name, project_id, position, archived_at,
                 'updated_at',
             ],
         ]);
+
+    // REQ-RESOURCES-2 (spec): BoardResource MUST NOT expose `project_id`.
+    // The frontend reads `task_id` + the embedded `task` object instead.
+    $response->assertJsonMissingPath('data.project_id');
 });
 
 it('caps board position strings at 1024 bytes', function (): void {

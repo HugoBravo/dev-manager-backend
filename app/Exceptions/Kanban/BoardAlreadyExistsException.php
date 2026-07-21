@@ -9,7 +9,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * Thrown when a board create or rename attempts to use a name that already
- * exists on another ACTIVE board in the same project (case-insensitive).
+ * exists on another ACTIVE board in the same task (case-insensitive).
  * Renders as HTTP 422 Unprocessable Entity with a typed `code` field the
  * frontend can switch on.
  *
@@ -20,11 +20,11 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 final class BoardAlreadyExistsException extends HttpException
 {
-    public function __construct(public readonly string $name, public readonly int $projectId)
+    public function __construct(public readonly string $name, public readonly int $taskId)
     {
         parent::__construct(
             statusCode: 422,
-            message: "A board named \"{$name}\" already exists in this project.",
+            message: "A board named \"{$name}\" already exists in this task.",
         );
     }
 
@@ -38,7 +38,7 @@ final class BoardAlreadyExistsException extends HttpException
             'message' => $this->getMessage(),
             'code' => 'name_taken',
             'name' => $this->name,
-            'project_id' => $this->projectId,
+            'task_id' => $this->taskId,
         ], 422);
     }
 }

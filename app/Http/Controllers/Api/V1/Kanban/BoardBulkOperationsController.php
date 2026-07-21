@@ -43,9 +43,9 @@ final class BoardBulkOperationsController extends Controller
     use KanbanRequestScope;
 
     /**
-     * POST /api/v1/projects/{project}/kanban/boards/bulk-delete
+     * POST /api/v1/projects/{project}/tasks/{task}/kanban/boards/bulk-delete
      */
-    public function bulkDelete(BulkDeleteBoardsRequest $request, Project $project, ?Task $task = null): JsonResponse
+    public function bulkDelete(BulkDeleteBoardsRequest $request, Project $project, Task $task): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
@@ -56,7 +56,7 @@ final class BoardBulkOperationsController extends Controller
         $logger = app(BoardAuditLogger::class);
 
         foreach ($ids as $id) {
-            $board = $this->resolveBoardForCaller($projectModel, $id, $task);
+            $board = $this->resolveBoardForCaller($projectModel, $task, $id);
 
             if ($board === null) {
                 $results[] = [
@@ -98,9 +98,9 @@ final class BoardBulkOperationsController extends Controller
     }
 
     /**
-     * POST /api/v1/projects/{project}/kanban/boards/bulk-rename
+     * POST /api/v1/projects/{project}/tasks/{task}/kanban/boards/bulk-rename
      */
-    public function bulkRename(BulkRenameBoardsRequest $request, Project $project, ?Task $task = null): JsonResponse
+    public function bulkRename(BulkRenameBoardsRequest $request, Project $project, Task $task): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
@@ -113,7 +113,7 @@ final class BoardBulkOperationsController extends Controller
         $logger = app(BoardAuditLogger::class);
 
         foreach ($ids as $id) {
-            $board = $this->resolveBoardForCaller($projectModel, $id, $task);
+            $board = $this->resolveBoardForCaller($projectModel, $task, $id);
 
             if ($board === null) {
                 $results[] = [
@@ -171,24 +171,21 @@ final class BoardBulkOperationsController extends Controller
     }
 
     /**
-     * Resolve a board by id within the project's ownership chain. Returns
-     * `null` when the id does not belong to the project or refers to a
+     * Resolve a board by id within the task's ownership chain. Returns
+     * `null` when the id does not belong to the task or refers to a
      * soft-deleted row — callers translate `null` into a 404 result entry
      * (no existence leak).
      */
-    private function resolveBoardForCaller(Project $project, int $id, ?Task $task = null): ?KanbanBoard
+    private function resolveBoardForCaller(Project $project, Task $task, int $id): ?KanbanBoard
     {
         try {
-            $query = KanbanBoard::query()
-                ->whereKey($id);
-
-            if ($task !== null) {
-                $query->where('task_id', $task->id);
-            } else {
-                $query->where('project_id', $project->id);
-            }
-
-            return $query->firstOrFail();
+            return KanbanBoard::query()
+                ->whereKey($id)
+                ->where('task_id', $task->id)
+                ->whereHas('project', function ($q) use ($project): void {
+                    $q->whereKey($project->getKey());
+                })
+                ->firstOrFail();
         } catch (ModelNotFoundException) {
             return null;
         }

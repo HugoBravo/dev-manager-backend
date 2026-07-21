@@ -42,7 +42,7 @@ final class StoreBoardRequest extends FormRequest
                 'min:1',
                 'max:100',
                 new UniqueActiveBoardName(
-                    projectId: (int) $this->route('project')->getKey(),
+                    taskId: (int) $this->route('task')->getKey(),
                 ),
             ],
         ];

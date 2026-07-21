@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1\Kanban\Concerns;
 
 use App\Models\Project;
+use App\Models\Task;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 
@@ -89,6 +90,38 @@ trait KanbanRequestScope
         $archivedAt = $projectModel?->archived_at ?? null;
         if ($archivedAt !== null) {
             throw (new ModelNotFoundException)->setModel($projectClass, [$projectId]);
+        }
+    }
+
+    /**
+     * Throw `ModelNotFoundException` (404) when the resolved task is
+     * archived AND the request did not opt in to viewing archived
+     * resources. Mirrors `ensureNotArchivedProject()` for the new task
+     * layer added by the kanban-per-task refactor. Spec REQ-MIGRATION-2.
+     *
+     * Why a separate helper instead of folding into the project one:
+     *   - The chain shape is `project → task → board`; either layer may
+     *     be archived independently. Folding the two checks into one
+     *     helper would conflate which layer actually blocked the view.
+     *   - The 404 envelope reports the task's id (not the project's)
+     *     so the frontend can branch on which layer was the source of
+     *     the refresh.
+     *   - Both checks fire; the project one happens first, so an
+     *     archived-project archive isn't masked by an active task and
+     *     vice-versa.
+     */
+    protected function ensureNotArchivedTask(
+        Request $request,
+        mixed $taskModel,
+        int|string $taskId,
+    ): void {
+        if ($this->includeArchived($request)) {
+            return;
+        }
+
+        $archivedAt = $taskModel?->archived_at ?? null;
+        if ($archivedAt !== null) {
+            throw (new ModelNotFoundException)->setModel(Task::class, [$taskId]);
         }
     }
 
