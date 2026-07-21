@@ -25,13 +25,13 @@ it('returns 401 on every column endpoint without a bearer token', function (stri
 
     $response->assertUnauthorized();
 })->with([
-    'index' => ['GET', '/api/v1/projects/1/kanban/boards/1/columns'],
-    'store' => ['POST', '/api/v1/projects/1/kanban/boards/1/columns'],
-    'show' => ['GET', '/api/v1/projects/1/kanban/boards/1/columns/1'],
-    'update' => ['PATCH', '/api/v1/projects/1/kanban/boards/1/columns/1'],
-    'destroy' => ['DELETE', '/api/v1/projects/1/kanban/boards/1/columns/1'],
-    'reorder' => ['POST', '/api/v1/projects/1/kanban/boards/1/columns/reorder'],
-    'move' => ['POST', '/api/v1/projects/1/kanban/boards/1/columns/1/move'],
+    'index' => ['GET', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns'],
+    'store' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns'],
+    'show' => ['GET', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1'],
+    'update' => ['PATCH', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1'],
+    'destroy' => ['DELETE', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1'],
+    'reorder' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/reorder'],
+    'move' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/move'],
 ]);
 
 it('lists columns of an owned board with a stable position order', function (): void {
@@ -42,7 +42,7 @@ it('lists columns of an owned board with a stable position order', function (): 
     KanbanColumn::factory()->forBoard($board)->count(3)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns")
         ->assertOk();
 
     $ids = collect($response->json('data'))
@@ -58,7 +58,7 @@ it('creates a column in an owned board with 201', function (): void {
     $board = KanbanBoard::factory()->forProject($project)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns", [
             'name' => 'Todo',
         ])
         ->assertCreated();
@@ -80,7 +80,7 @@ it('rejects create with empty name', function (): void {
     $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns", ['name' => ''])
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns", ['name' => ''])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['name']);
 });
@@ -91,7 +91,7 @@ it('rejects create with name longer than 100 chars', function (): void {
     $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns", [
             'name' => str_repeat('a', 101),
         ])
         ->assertStatus(422)
@@ -105,7 +105,7 @@ it('shows a column to the project owner', function (): void {
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}")
         ->assertOk()
         ->assertJsonPath('data.id', $column->id)
         ->assertJsonPath('data.name', $column->name);
@@ -119,7 +119,7 @@ it('returns 404 when a non-owner fetches a column (no existence leak)', function
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}")
         ->assertNotFound();
 });
 
@@ -130,7 +130,7 @@ it('renames a column for the project owner', function (): void {
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}", [
             'name' => 'Doing',
         ])
         ->assertOk()
@@ -146,7 +146,7 @@ it('rejects update with name longer than 100 chars', function (): void {
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}", [
             'name' => str_repeat('b', 101),
         ])
         ->assertStatus(422)
@@ -161,7 +161,7 @@ it('returns 404 when a non-owner updates a column', function (): void {
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}", [
             'name' => 'Hijacked',
         ])
         ->assertNotFound();
@@ -176,7 +176,7 @@ it('deletes an empty column with 204', function (): void {
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}")
         ->assertNoContent();
 
     expect(KanbanColumn::query()->find($column->id))->toBeNull();
@@ -206,7 +206,7 @@ it('returns 409 with a typed column_has_contents code when destroying a column w
     );
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}")
         ->assertStatus(409);
 
     expect($response->json('code'))->toBe('column_has_contents');
@@ -221,7 +221,7 @@ it('returns 404 when a non-owner deletes a column', function (): void {
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}")
         ->assertNotFound();
 
     expect(KanbanColumn::query()->find($column->id))->not->toBeNull();
@@ -234,7 +234,7 @@ it('archives a column via archived_at (sets timestamp)', function (): void {
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}", [
             'name' => $column->name,
             'archived_at' => now()->toIso8601String(),
         ])
@@ -254,13 +254,13 @@ it('reorders columns within the same board and persists the new ordering', funct
     $c3 = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/reorder", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/reorder", [
             'ordered_ids' => [$c3->id, $c1->id, $c2->id],
         ])
         ->assertOk();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns")
         ->assertOk();
 
     $ids = collect($response->json('data'))
@@ -282,7 +282,7 @@ it('rejects reorder with ids from another board', function (): void {
     $foreignColumn = KanbanColumn::factory()->forBoard($otherBoard)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/reorder", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/reorder", [
             'ordered_ids' => [$c1->id, $foreignColumn->id, $c2->id],
         ])
         ->assertStatus(422)
@@ -298,7 +298,7 @@ it('returns 404 when a non-owner reorders columns', function (): void {
     $c2 = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/reorder", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/reorder", [
             'ordered_ids' => [$c2->id, $c1->id],
         ])
         ->assertNotFound();
@@ -313,7 +313,7 @@ it('rejects reorder with duplicate ids', function (): void {
     $c2 = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/reorder", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/reorder", [
             'ordered_ids' => [$c1->id, $c1->id, $c2->id],
         ])
         ->assertStatus(422)
@@ -329,7 +329,7 @@ it('moves a column to another board on the same project, preserving the column i
     $column = KanbanColumn::factory()->forBoard($sourceBoard)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$sourceBoard->id}/columns/{$column->id}/move", [
+        ->postJson(kanbanPrefix($project)."/boards/{$sourceBoard->id}/columns/{$column->id}/move", [
             'to_board_id' => $targetBoard->id,
         ])
         ->assertOk();
@@ -361,7 +361,7 @@ it('returns 404 when moving a column to a board owned by a different user', func
     $column = KanbanColumn::factory()->forBoard($sourceBoard)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$sourceBoard->id}/columns/{$column->id}/move", [
+        ->postJson(kanbanPrefix($project)."/boards/{$sourceBoard->id}/columns/{$column->id}/move", [
             'to_board_id' => $foreignTargetBoard->id,
         ])
         ->assertNotFound();
@@ -384,7 +384,7 @@ it('returns 404 when moving to a same-project board but the column does not belo
     $foreignColumn = KanbanColumn::factory()->forBoard($foreignBoard)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$sourceBoard->id}/columns/{$foreignColumn->id}/move", [
+        ->postJson(kanbanPrefix($project)."/boards/{$sourceBoard->id}/columns/{$foreignColumn->id}/move", [
             'to_board_id' => $targetBoard->id,
         ])
         ->assertNotFound();
@@ -408,7 +408,7 @@ it('exposes the resource shape with id, board_id, name, position, archived_at, t
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}")
         ->assertOk()
         ->assertJsonStructure([
             'data' => [
@@ -433,7 +433,7 @@ it('does not leak any other board columns when listing one board', function (): 
     KanbanColumn::factory()->forBoard($otherBoard)->count(3)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns")
         ->assertOk();
 
     $ids = collect($response->json('data'))
@@ -451,7 +451,7 @@ it('returns 404 on list when the user does not own the project', function (): vo
     $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns")
         ->assertNotFound();
 });
 
@@ -462,7 +462,7 @@ it('returns 404 on store when the user does not own the project', function (): v
     $board = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns", [
             'name' => 'Hostile',
         ])
         ->assertNotFound();

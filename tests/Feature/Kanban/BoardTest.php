@@ -25,13 +25,13 @@ it('returns 401 on every board endpoint without a bearer token', function (strin
 
     $response->assertUnauthorized();
 })->with([
-    'index' => ['GET', '/api/v1/projects/1/kanban/boards'],
-    'store' => ['POST', '/api/v1/projects/1/kanban/boards'],
-    'show' => ['GET', '/api/v1/projects/1/kanban/boards/1'],
-    'update' => ['PATCH', '/api/v1/projects/1/kanban/boards/1'],
-    'destroy' => ['DELETE', '/api/v1/projects/1/kanban/boards/1'],
-    'archive' => ['POST', '/api/v1/projects/1/kanban/boards/1/archive'],
-    'reorder' => ['POST', '/api/v1/projects/1/kanban/boards/reorder'],
+    'index' => ['GET', '/api/v1/projects/1/tasks/1/kanban/boards'],
+    'store' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards'],
+    'show' => ['GET', '/api/v1/projects/1/tasks/1/kanban/boards/1'],
+    'update' => ['PATCH', '/api/v1/projects/1/tasks/1/kanban/boards/1'],
+    'destroy' => ['DELETE', '/api/v1/projects/1/tasks/1/kanban/boards/1'],
+    'archive' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/1/archive'],
+    'reorder' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/reorder'],
 ]);
 
 it('lists boards of an owned project', function (): void {
@@ -40,7 +40,7 @@ it('lists boards of an owned project', function (): void {
     KanbanBoard::factory()->for($project, 'project')->count(3)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards")
+        ->getJson(kanbanPrefix($project).'/boards')
         ->assertOk();
 
     $ids = collect($response->json('data'))
@@ -56,7 +56,7 @@ it('returns a paginated 25-per-page list of boards', function (): void {
     KanbanBoard::factory()->for($project, 'project')->count(30)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards")
+        ->getJson(kanbanPrefix($project).'/boards')
         ->assertOk();
 
     // Resource::collection wraps each item in {data:{...}}, so the top-level
@@ -69,7 +69,7 @@ it('creates a board in an owned project with 201', function (): void {
     $project = Project::factory()->forOwner($owner)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards", [
+        ->postJson(kanbanPrefix($project).'/boards', [
             'name' => 'Sprint 1',
         ])
         ->assertCreated();
@@ -89,7 +89,7 @@ it('rejects create with empty name', function (): void {
     $project = Project::factory()->forOwner($owner)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards", ['name' => ''])
+        ->postJson(kanbanPrefix($project).'/boards', ['name' => ''])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['name']);
 });
@@ -99,7 +99,7 @@ it('rejects create with name longer than 100 chars', function (): void {
     $project = Project::factory()->forOwner($owner)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards", [
+        ->postJson(kanbanPrefix($project).'/boards', [
             'name' => str_repeat('a', 101),
         ])
         ->assertStatus(422)
@@ -112,7 +112,7 @@ it('returns 404 when listing boards of a project the user does not own', functio
     $project = Project::factory()->forOwner($owner)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards")
+        ->getJson(kanbanPrefix($project).'/boards')
         ->assertNotFound();
 });
 
@@ -122,7 +122,7 @@ it('shows a board to the project owner', function (): void {
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertOk()
         ->assertJsonPath('data.id', $board->id)
         ->assertJsonPath('data.name', $board->name);
@@ -135,7 +135,7 @@ it('returns 404 when a non-owner fetches a board (no existence leak)', function 
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertNotFound();
 });
 
@@ -149,7 +149,7 @@ it('returns 404 when fetching a board of a project the user does not own even if
     $strangerProject = Project::factory()->forOwner($stranger)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->getJson("/api/v1/projects/{$strangerProject->id}/kanban/boards/{$board->id}")
+        ->getJson(kanbanPrefix($strangerProject)."/boards/{$board->id}")
         ->assertNotFound();
 });
 
@@ -159,7 +159,7 @@ it('updates a boards name for the project owner', function (): void {
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}", [
             'name' => 'Renamed',
         ])
         ->assertOk()
@@ -179,7 +179,7 @@ it('writes a renamed audit row when board name changes', function (): void {
     ]);
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}", [
             'name' => 'Renamed',
         ])
         ->assertOk();
@@ -216,7 +216,7 @@ it('does NOT write a renamed audit row when the new name equals the current name
     ]);
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}", [
             'name' => 'Stable',
         ])
         ->assertOk();
@@ -234,7 +234,7 @@ it('returns 404 when a non-owner updates a board', function (): void {
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}", [
             'name' => 'Hijacked',
         ])
         ->assertNotFound();
@@ -248,7 +248,7 @@ it('rejects update with name longer than 100 chars', function (): void {
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}", [
             'name' => str_repeat('b', 101),
         ])
         ->assertStatus(422)
@@ -261,7 +261,7 @@ it('deletes an empty board with 204 (soft-delete: row stays, deleted_at is set)'
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertNoContent();
 
     // Soft-deletion leaves the row on disk with `deleted_at` populated so the
@@ -280,11 +280,11 @@ it('returns 404 when GET-ting a soft-deleted board', function (): void {
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertNoContent();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertNotFound();
 });
 
@@ -319,7 +319,7 @@ it('returns 409 when destroying a board that has columns (with cards under it)',
     );
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertStatus(409);
 
     expect(KanbanBoard::query()->find($board->id))->not->toBeNull();
@@ -344,7 +344,7 @@ it('returns 409 with a typed `board_has_contents` code in the response body', fu
     );
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertStatus(409);
 
     expect($response->json('code'))->toBe('board_has_contents');
@@ -357,7 +357,7 @@ it('returns 404 when a non-owner deletes a board', function (): void {
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertNotFound();
 
     expect(KanbanBoard::query()->find($board->id))->not->toBeNull();
@@ -369,7 +369,7 @@ it('archives a board for the project owner', function (): void {
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/archive")
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/archive")
         ->assertOk();
 
     // Resource is wrapped by BoardResource's own `data` key inside the
@@ -394,13 +394,13 @@ it('archive is a toggle: a second archive call on an already-archived board clea
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/archive")
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/archive")
         ->assertOk();
 
     expect($board->fresh()->archived_at)->not->toBeNull();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/archive")
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/archive")
         ->assertOk();
 
     // Toggle semantic: archive twice → unarchived.
@@ -423,7 +423,7 @@ it('returns 404 when a non-owner archives a board', function (): void {
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/archive")
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/archive")
         ->assertNotFound();
 
     expect($board->fresh()->archived_at)->toBeNull();
@@ -439,13 +439,13 @@ it('reorders boards and persists the new ordering on a second fetch', function (
 
     // New order: b3, b1, b2.
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/reorder", [
+        ->postJson(kanbanPrefix($project).'/boards/reorder', [
             'ordered_ids' => [$b3->id, $b1->id, $b2->id],
         ])
         ->assertOk();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards")
+        ->getJson(kanbanPrefix($project).'/boards')
         ->assertOk();
 
     $ids = collect($response->json('data'))
@@ -477,7 +477,7 @@ it('returns 404 when a non-owner reorders boards', function (): void {
     $b2 = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/reorder", [
+        ->postJson(kanbanPrefix($project).'/boards/reorder', [
             'ordered_ids' => [$b2->id, $b1->id],
         ])
         ->assertNotFound();
@@ -494,7 +494,7 @@ it('rejects reorder payload with ids from another project', function (): void {
     $foreignBoard = KanbanBoard::factory()->for($otherProject, 'project')->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/reorder", [
+        ->postJson(kanbanPrefix($project).'/boards/reorder', [
             'ordered_ids' => [$b1->id, $foreignBoard->id, $b2->id],
         ])
         ->assertStatus(422)
@@ -508,7 +508,7 @@ it('rejects reorder payload with duplicate ids', function (): void {
     $b2 = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/reorder", [
+        ->postJson(kanbanPrefix($project).'/boards/reorder', [
             'ordered_ids' => [$b1->id, $b1->id, $b2->id],
         ])
         ->assertStatus(422)
@@ -521,7 +521,7 @@ it('exposes the resource shape with id, name, project_id, position, archived_at,
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertOk()
         ->assertJsonStructure([
             'data' => [
@@ -552,13 +552,13 @@ it('rejects 422 name_taken on case-insensitive duplicate create', function (): v
 
     // "Sprint 1" with intentional whitespace padding inside the name.
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards", [
+        ->postJson(kanbanPrefix($project).'/boards', [
             'name' => 'Sprint 1',
         ])
         ->assertCreated();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards", [
+        ->postJson(kanbanPrefix($project).'/boards', [
             'name' => 'sprint  1  ',
         ])
         ->assertStatus(422);
@@ -573,7 +573,7 @@ it('rejects 422 name_taken on rename to existing name (case-insensitive)', funct
     KanbanBoard::factory()->for($project, 'project')->create(['name' => 'Sprint 2']);
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$b1->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$b1->id}", [
             'name' => 'sprint 2',
         ])
         ->assertStatus(422);
@@ -586,17 +586,17 @@ it('allows recycling a name from a trashed board', function (): void {
     $project = Project::factory()->forOwner($owner)->create();
 
     $first = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards", ['name' => 'Sprint 1'])
+        ->postJson(kanbanPrefix($project).'/boards', ['name' => 'Sprint 1'])
         ->assertCreated();
     $firstId = $first->json('data.id');
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$firstId}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$firstId}")
         ->assertNoContent();
 
     // After the row is soft-deleted, recreating with the same name must succeed.
     $second = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards", ['name' => 'Sprint 1'])
+        ->postJson(kanbanPrefix($project).'/boards', ['name' => 'Sprint 1'])
         ->assertCreated();
 
     expect($second->json('data.id'))->not->toBe($firstId);

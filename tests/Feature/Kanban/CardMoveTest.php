@@ -36,7 +36,7 @@ it('moves a card cross-column and preserves stable ascending position order in t
     KanbanCard::factory()->forColumn($targetColumn)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$sourceColumn->id}/cards/{$sourceA->id}/move", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$sourceColumn->id}/cards/{$sourceA->id}/move", [
             'to_column_id' => $targetColumn->id,
         ])
         ->assertOk();
@@ -46,7 +46,7 @@ it('moves a card cross-column and preserves stable ascending position order in t
 
     // Fetch destination column and assert ascending position invariant on visible (non-archived) cards.
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$targetColumn->id}/cards")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$targetColumn->id}/cards")
         ->assertOk();
 
     $cards = collect($response->json('data'))
@@ -80,7 +80,7 @@ it('returns 404 when moving a card to a column in a different project of the SAM
     $card = KanbanCard::factory()->forColumn($sourceColumn)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$projectA->id}/kanban/boards/{$boardA->id}/columns/{$sourceColumn->id}/cards/{$card->id}/move", [
+        ->postJson(kanbanPrefix($projectA)."/boards/{$boardA->id}/columns/{$sourceColumn->id}/cards/{$card->id}/move", [
             'to_column_id' => $foreignColumn->id,
         ])
         ->assertNotFound();
@@ -98,7 +98,7 @@ it('returns 404 when a stranger moves a card', function (): void {
     $card = KanbanCard::factory()->forColumn($sourceColumn)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$sourceColumn->id}/cards/{$card->id}/move", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$sourceColumn->id}/cards/{$card->id}/move", [
             'to_column_id' => $targetColumn->id,
         ])
         ->assertNotFound();
@@ -117,13 +117,13 @@ it('reorders cards within a column and persists the new order', function (): voi
     $c = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/reorder", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/reorder", [
             'ordered_ids' => [$c->id, $a->id, $b->id],
         ])
         ->assertOk();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards")
         ->assertOk();
 
     $ids = collect($response->json('data'))
@@ -144,7 +144,7 @@ it('rejects reorder with duplicate ids', function (): void {
     KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/reorder", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/reorder", [
             'ordered_ids' => [$a->id, $a->id, $a->id],
         ])
         ->assertStatus(422)
@@ -161,7 +161,7 @@ it('returns 404 when a stranger reorders cards', function (): void {
     $b = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/reorder", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/reorder", [
             'ordered_ids' => [$b->id, $a->id],
         ])
         ->assertNotFound();

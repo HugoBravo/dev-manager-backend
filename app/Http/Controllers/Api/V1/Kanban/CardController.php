@@ -16,6 +16,7 @@ use App\Models\KanbanBoard;
 use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
 use App\Models\Project;
+use App\Models\Task;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -52,7 +53,7 @@ final class CardController extends Controller
      * hides them). Cross-owner → 404 via Route::bind.
      * R1: archived project → empty list unless `?include_archived=1`.
      */
-    public function index(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column): JsonResponse
+    public function index(Request $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -88,7 +89,7 @@ final class CardController extends Controller
      * appending to the bottom of the column.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function store(StoreCardRequest $request, Project $project, KanbanBoard $board, KanbanColumn $column): JsonResponse
+    public function store(StoreCardRequest $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -111,7 +112,7 @@ final class CardController extends Controller
      * Show one card. Cross-owner → 404 via Route::bind.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function show(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function show(Request $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -127,7 +128,7 @@ final class CardController extends Controller
      * Update title / body / due_date on a card. Cross-owner → 404.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function update(UpdateCardRequest $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function update(UpdateCardRequest $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -166,7 +167,7 @@ final class CardController extends Controller
      *     controller-led cascade — see the trait docblock for the rationale)
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function destroy(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): Response
+    public function destroy(Request $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): Response
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -186,7 +187,7 @@ final class CardController extends Controller
      * (and thus no precision-exhaustion risk on bulk reorder).
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function reorder(ReorderCardsRequest $request, Project $project, KanbanBoard $board, KanbanColumn $column): JsonResponse
+    public function reorder(ReorderCardsRequest $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);

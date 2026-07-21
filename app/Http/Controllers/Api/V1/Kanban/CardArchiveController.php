@@ -11,6 +11,7 @@ use App\Models\KanbanBoard;
 use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
 use App\Models\Project;
+use App\Models\Task;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -32,7 +33,7 @@ final class CardArchiveController extends Controller
     /**
      * Archive a card (sets `archived_at` to now).
      */
-    public function archive(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function archive(Request $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -52,7 +53,7 @@ final class CardArchiveController extends Controller
     /**
      * Restore an archived card (clears `archived_at`).
      */
-    public function restore(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function restore(Request $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);

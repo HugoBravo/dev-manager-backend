@@ -61,28 +61,28 @@ it('runs the full project → board → column → card → comment → attachme
 
     // ─── Board → 200 ──────────────────────────────────────────────────
     $this->actingAs($demo, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertOk()
         ->assertJsonPath('data.id', $board->id);
 
     // ─── Column → 200 ─────────────────────────────────────────────────
     $firstColumn = $columns->first();
     $this->actingAs($demo, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$firstColumn->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$firstColumn->id}")
         ->assertOk()
         ->assertJsonPath('data.id', $firstColumn->id);
 
     // ─── Card → 200 ───────────────────────────────────────────────────
     $firstCard = $cards->first();
     $cardShowResponse = $this->actingAs($demo, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}")
         ->assertOk()
         ->assertJsonPath('data.id', $firstCard->id);
 
     // ─── Comment → 201 (post) + 200 (index) ───────────────────────────
     $commentResponse = $this->actingAs($demo, 'sanctum')
         ->postJson(
-            "/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}/comments",
+            kanbanPrefix($project)."/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}/comments",
             ['body' => 'Smoke test comment'],
         )
         ->assertCreated()
@@ -91,14 +91,14 @@ it('runs the full project → board → column → card → comment → attachme
     expect($newCommentId)->toBeInt();
 
     $this->actingAs($demo, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}/comments")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}/comments")
         ->assertOk()
         ->assertJsonFragment(['id' => $newCommentId]);
 
     // ─── Attachment → 201 (post) + 200 (index) ────────────────────────
     $uploadResponse = $this->actingAs($demo, 'sanctum')
         ->postJson(
-            "/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}/attachments",
+            kanbanPrefix($project)."/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}/attachments",
             ['file' => UploadedFile::fake()->image('smoke.png', 8, 8)],
         )
         ->assertCreated();
@@ -118,7 +118,7 @@ it('runs the full project → board → column → card → comment → attachme
 
     // Index includes the new attachment.
     $this->actingAs($demo, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}/attachments")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}/attachments")
         ->assertOk()
         ->assertJsonFragment(['id' => $newAttachmentId]);
 
@@ -126,7 +126,7 @@ it('runs the full project → board → column → card → comment → attachme
     // Hard-delete the card; FK CASCADE removes comments + attachments
     // rows, the CascadesKanbanCardFiles trait removes the attachment file.
     $this->actingAs($demo, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}")
         ->assertNoContent();
 
     // Card row gone.
@@ -143,6 +143,6 @@ it('runs the full project → board → column → card → comment → attachme
 
     // ─── 404 on re-fetch ──────────────────────────────────────────────
     $this->actingAs($demo, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$firstColumn->id}/cards/{$firstCard->id}")
         ->assertNotFound();
 });

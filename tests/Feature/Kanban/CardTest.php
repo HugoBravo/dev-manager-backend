@@ -36,14 +36,14 @@ it('returns 401 on every card endpoint without a bearer token', function (string
 
     $response->assertUnauthorized();
 })->with([
-    'index' => ['GET', '/api/v1/projects/1/kanban/boards/1/columns/1/cards'],
-    'store' => ['POST', '/api/v1/projects/1/kanban/boards/1/columns/1/cards'],
-    'show' => ['GET', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/1'],
-    'update' => ['PATCH', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/1'],
-    'destroy' => ['DELETE', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/1'],
-    'move' => ['POST', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/1/move'],
-    'archive' => ['POST', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/1/archive'],
-    'reorder' => ['POST', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/reorder'],
+    'index' => ['GET', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards'],
+    'store' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards'],
+    'show' => ['GET', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/1'],
+    'update' => ['PATCH', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/1'],
+    'destroy' => ['DELETE', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/1'],
+    'move' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/1/move'],
+    'archive' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/1/archive'],
+    'reorder' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/reorder'],
 ]);
 
 it('lists cards of an owned column with a stable position order', function (): void {
@@ -55,7 +55,7 @@ it('lists cards of an owned column with a stable position order', function (): v
     KanbanCard::factory()->forColumn($column)->count(3)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards")
         ->assertOk();
 
     expect($response->json('data'))->toHaveCount(3);
@@ -71,7 +71,7 @@ it('hides archived cards on index by default', function (): void {
     KanbanCard::factory()->forColumn($column)->count(2)->archived()->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards")
         ->assertOk();
 
     expect($response->json('data'))->toHaveCount(3);
@@ -87,7 +87,7 @@ it('returns all 5 cards when ?archived=1 is supplied on index', function (): voi
     KanbanCard::factory()->forColumn($column)->count(2)->archived()->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards?archived=1")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards?archived=1")
         ->assertOk();
 
     expect($response->json('data'))->toHaveCount(5);
@@ -100,7 +100,7 @@ it('creates a card with 201 and a default position', function (): void {
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards", [
             'title' => 'Ship it',
         ])
         ->assertCreated();
@@ -126,7 +126,7 @@ it('creates a card with a Markdown body stored verbatim', function (): void {
     $markdown = "# Title\n\n- one\n- two\n\n```php\nvar_dump(1);\n```\n<script>alert(1)</script>";
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards", [
             'title' => 'Card',
             'body' => $markdown,
         ])
@@ -146,7 +146,7 @@ it('rejects create with missing title', function (): void {
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards", [])
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards", [])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['title']);
 });
@@ -158,7 +158,7 @@ it('rejects create with title longer than 255 chars', function (): void {
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards", [
             'title' => str_repeat('t', 256),
         ])
         ->assertStatus(422)
@@ -172,7 +172,7 @@ it('rejects create with body longer than 65535 chars', function (): void {
     $column = KanbanColumn::factory()->forBoard($board)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards", [
             'title' => 'Oversize',
             'body' => str_repeat('a', 65536),
         ])
@@ -188,7 +188,7 @@ it('shows a card to the project owner', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
         ->assertOk()
         ->assertJsonPath('data.id', $card->id)
         ->assertJsonPath('data.title', $card->title);
@@ -203,7 +203,7 @@ it('returns 404 when a non-owner fetches a card', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
         ->assertNotFound();
 });
 
@@ -216,7 +216,7 @@ it('returns 404 when fetching a card from a different column on the same board',
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$otherColumn->id}/cards/{$card->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$otherColumn->id}/cards/{$card->id}")
         ->assertNotFound();
 });
 
@@ -228,7 +228,7 @@ it('updates a card title and body', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
             'title' => 'Renamed',
             'body' => 'New body',
         ])
@@ -252,7 +252,7 @@ it('accepts update with empty body', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create(['body' => 'old body']);
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
             'title' => $card->title,
             'body' => '',
         ])
@@ -270,7 +270,7 @@ it('accepts update with null body', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create(['body' => 'old body']);
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
             'title' => $card->title,
             'body' => null,
         ])
@@ -287,7 +287,7 @@ it('preserves raw body on update including script tags verbatim (no sanitization
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
             'title' => $card->title,
             'body' => '<script>alert("xss")</script>',
         ])
@@ -304,7 +304,7 @@ it('rejects update with body longer than 65535 chars', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
             'title' => $card->title,
             'body' => str_repeat('a', 65536),
         ])
@@ -320,7 +320,7 @@ it('sets and clears due_date on update', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
             'title' => $card->title,
             'due_date' => '2027-01-31',
         ])
@@ -329,7 +329,7 @@ it('sets and clears due_date on update', function (): void {
     expect($card->fresh()->due_date?->toDateString())->toBe('2027-01-31');
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}", [
             'title' => $card->title,
             'due_date' => null,
         ])
@@ -346,7 +346,7 @@ it('hard-deletes a card with 204', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
         ->assertNoContent();
 
     expect(KanbanCard::query()->find($card->id))->toBeNull();
@@ -361,7 +361,7 @@ it('returns 404 when a non-owner deletes a card', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
         ->assertNotFound();
 
     expect(KanbanCard::query()->find($card->id))->not->toBeNull();
@@ -375,13 +375,13 @@ it('archives a card and restores it via dedicated endpoints', function (): void 
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/archive")
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/archive")
         ->assertOk();
 
     expect($card->fresh()->archived_at)->not->toBeNull();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/restore")
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/restore")
         ->assertOk();
 
     expect($card->fresh()->archived_at)->toBeNull();
@@ -395,12 +395,12 @@ it('archive is idempotent on re-archive', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/archive")
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/archive")
         ->assertOk();
     $firstTimestamp = $card->fresh()->archived_at;
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/archive")
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/archive")
         ->assertOk();
 
     $secondTimestamp = $card->fresh()->archived_at;
@@ -416,7 +416,7 @@ it('returns 404 when a non-owner archives a card', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/archive")
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/archive")
         ->assertNotFound();
 
     expect($card->fresh()->archived_at)->toBeNull();
@@ -430,7 +430,7 @@ it('exposes the resource shape with id, column_id, title, body, due_date, archiv
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
         ->assertOk()
         ->assertJsonStructure([
             'data' => [
@@ -471,7 +471,7 @@ it('does not leak other column cards when listing one column', function (): void
     KanbanCard::factory()->forColumn($otherColumn)->count(3)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards")
         ->assertOk();
 
     expect($response->json('data'))->toHaveCount(2)
@@ -502,7 +502,7 @@ it('accepts dataset payloads and stores body verbatim (no sanitization)', functi
     $title = $plain ?? 'T';
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards", [
             'title' => $title,
             'body' => $body,
         ])

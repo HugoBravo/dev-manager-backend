@@ -29,7 +29,7 @@ it('returns the project board list with a slug-keyed URL', function (): void {
 
     Sanctum::actingAs($owner);
 
-    getJson("/api/v1/projects/{$project->slug}/kanban/boards")
+    getJson(kanbanPrefix($project, $project->slug).'/boards')
         ->assertOk()
         ->assertJsonPath('data.0.data.name', 'Slug Board');
 });
@@ -41,7 +41,7 @@ it('still returns the project board list with an id-keyed URL (legacy callers)',
 
     Sanctum::actingAs($owner);
 
-    getJson("/api/v1/projects/{$project->id}/kanban/boards")
+    getJson(kanbanPrefix($project).'/boards')
         ->assertOk()
         ->assertJsonPath('data.0.data.name', 'Id Board');
 });
@@ -53,7 +53,7 @@ it('returns 404 on a stranger-owned slug (no existence leak)', function (): void
 
     Sanctum::actingAs($stranger);
 
-    getJson("/api/v1/projects/{$project->slug}/kanban/boards")
+    getJson(kanbanPrefix($project, $project->slug).'/boards')
         ->assertNotFound();
 });
 
@@ -62,7 +62,7 @@ it('returns 404 on an unknown slug (no existence leak)', function (): void {
 
     Sanctum::actingAs($owner);
 
-    getJson('/api/v1/projects/totally-not-a-real-slug/kanban/boards')
+    getJson('/api/v1/projects/totally-not-a-real-slug/tasks/1/kanban/boards')
         ->assertNotFound();
 });
 

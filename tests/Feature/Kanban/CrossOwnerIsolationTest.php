@@ -49,7 +49,7 @@ it('lets the owner reach their own board index', function (): void {
     KanbanBoard::factory()->forProject($project)->count(2)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards")
+        ->getJson(kanbanPrefix($project).'/boards')
         ->assertOk()
         ->assertJsonStructure(['data']);
 });
@@ -69,7 +69,7 @@ it('returns 404 (not 403) when an attacker fetches another user project board', 
 
     // Explicit assertion comment — this MUST be 404, NOT 403, by design.
     $this->actingAs($attacker, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertNotFound();
 });
 
@@ -84,7 +84,7 @@ it('returns empty board list when the project is archived and the flag is omitte
     KanbanBoard::factory()->forProject($project)->count(3)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards")
+        ->getJson(kanbanPrefix($project).'/boards')
         ->assertOk()
         ->assertJsonCount(0, 'data');
 });
@@ -95,11 +95,11 @@ it('returns boards when the project is archived and ?include_archived=1 is set',
     KanbanBoard::factory()->forProject($project)->count(3)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards?include_archived=1")
+        ->getJson(kanbanPrefix($project).'/boards?include_archived=1')
         ->assertOk();
 
     // 3 boards → paginated data array length 3 (page size = 25).
-    expect($this->getJson("/api/v1/projects/{$project->id}/kanban/boards?include_archived=1")
+    expect($this->getJson(kanbanPrefix($project).'/boards?include_archived=1')
         ->json('data'))->toHaveCount(3);
 });
 
@@ -116,7 +116,7 @@ it('returns 404 on a card show when the project is archived and the flag is omit
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
         ->assertNotFound();
 });
 
@@ -128,7 +128,7 @@ it('returns 200 on a card show when the project is archived and ?include_archive
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}?include_archived=1")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}?include_archived=1")
         ->assertOk()
         ->assertJsonPath('data.id', $card->id);
 });
@@ -155,14 +155,14 @@ it('returns 404 to an attacker on every nested resource type', function (string 
     $method = 'GET';
     $path = match ($resourceType) {
         'project' => "/api/v1/projects/{$project->id}",
-        'board' => "/api/v1/projects/{$project->id}/kanban/boards/{$board->id}",
-        'column' => "/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}",
-        'card' => "/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}",
-        'comment' => "/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}",
+        'board' => kanbanPrefix($project)."/boards/{$board->id}",
+        'column' => kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}",
+        'card' => kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}",
+        'comment' => kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}",
         // Attachments only have index/store/destroy (no show) — exercise DELETE
         // to verify the binding closure scopes cross-owner correctly.
         'attachment' => (function () use ($project, $board, $column, $card, $attachment): array {
-            return ['DELETE', "/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments/{$attachment->id}"];
+            return ['DELETE', kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments/{$attachment->id}"];
         })(),
         default => throw new InvalidArgumentException("Unknown resource type: {$resourceType}"),
     };

@@ -49,9 +49,9 @@ it('returns 401 on every attachment endpoint without a bearer token', function (
 
     $response->assertUnauthorized();
 })->with([
-    'index' => ['GET', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/1/attachments'],
-    'store' => ['POST', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/1/attachments'],
-    'destroy' => ['DELETE', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/1/attachments/1'],
+    'index' => ['GET', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/1/attachments'],
+    'store' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/1/attachments'],
+    'destroy' => ['DELETE', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/1/attachments/1'],
 ]);
 
 it('uploads a valid .jpg attachment with 201 and writes the file to the local disk', function (): void {
@@ -64,7 +64,7 @@ it('uploads a valid .jpg attachment with 201 and writes the file to the local di
     $file = UploadedFile::fake()->image('photo.jpg', 10, 10)->size(100);
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->post("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
+        ->post(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
             'file' => $file,
         ]);
 
@@ -87,7 +87,7 @@ it('stores the uploaded file under kanban/cards/{card_id}/ with a uuid-prefixed 
     $file = UploadedFile::fake()->image('photo.jpg', 10, 10)->size(50);
 
     $this->actingAs($owner, 'sanctum')
-        ->post("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
+        ->post(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
             'file' => $file,
         ])
         ->assertCreated();
@@ -109,7 +109,7 @@ it('rejects .exe uploads with 422 attachment_mime_blocked and writes neither row
     $exe = UploadedFile::fake()->create('malware.exe', 10, 'application/x-msdownload');
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->post("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
+        ->post(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
             'file' => $exe,
         ]);
 
@@ -132,7 +132,7 @@ it('rejects uploads over 5 MB with 422', function (): void {
     $oversized = UploadedFile::fake()->image('huge.png', 10, 10)->size(5121);
 
     $this->actingAs($owner, 'sanctum')
-        ->post("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
+        ->post(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
             'file' => $oversized,
         ])
         ->assertStatus(422)
@@ -149,7 +149,7 @@ it('rejects uploads missing the file with 422', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->post("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [])
+        ->post(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['file']);
 
@@ -166,7 +166,7 @@ it('lists attachments of a card with paginated envelope (page size 25)', functio
     KanbanAttachment::factory()->forCard($card)->count(3)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments")
         ->assertOk();
 
     expect($response->json('data'))->toHaveCount(3)
@@ -182,7 +182,7 @@ it('hard-deletes an attachment with 204 and removes the file from disk', functio
 
     $file = UploadedFile::fake()->image('photo.jpg', 10, 10)->size(50);
     $this->actingAs($owner, 'sanctum')
-        ->post("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
+        ->post(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
             'file' => $file,
         ])
         ->assertCreated();
@@ -191,7 +191,7 @@ it('hard-deletes an attachment with 204 and removes the file from disk', functio
     Storage::disk('local')->assertExists($attachment->path);
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments/{$attachment->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments/{$attachment->id}")
         ->assertNoContent();
 
     Storage::disk('local')->assertMissing($attachment->path);
@@ -209,7 +209,7 @@ it('returns 404 when a non-owner uploads to a card they do not own', function ()
     $file = UploadedFile::fake()->image('photo.jpg', 10, 10)->size(50);
 
     $this->actingAs($stranger, 'sanctum')
-        ->post("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
+        ->post(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
             'file' => $file,
         ])
         ->assertNotFound();
@@ -227,7 +227,7 @@ it('returns 404 when a non-owner deletes an attachment', function (): void {
     $attachment = KanbanAttachment::factory()->forCard($card)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments/{$attachment->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments/{$attachment->id}")
         ->assertNotFound();
 
     $this->assertDatabaseHas('kanban_attachments', ['id' => $attachment->id]);
@@ -245,7 +245,7 @@ it('returns 404 when fetching an attachment id that belongs to another card via 
 
     // Asking for the attachment using the right (otherCard) id but the wrong card URL segment.
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments/{$attachmentOnOtherCard->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments/{$attachmentOnOtherCard->id}")
         ->assertNotFound();
 
     $this->assertDatabaseHas('kanban_attachments', ['id' => $attachmentOnOtherCard->id]);
@@ -261,7 +261,7 @@ it('returns 404 when fetching an attachment id that does not exist via cross-own
     $attachment = KanbanAttachment::factory()->forCard($card)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments/{$attachment->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments/{$attachment->id}")
         ->assertNotFound();
 
     $this->assertDatabaseHas('kanban_attachments', ['id' => $attachment->id]);
@@ -279,7 +279,7 @@ it('cascades attachment files and rows when a card is hard-deleted', function ()
     for ($i = 0; $i < 3; $i++) {
         $file = UploadedFile::fake()->image("photo{$i}.jpg", 10, 10)->size(50);
         $this->actingAs($owner, 'sanctum')
-            ->post("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
+            ->post(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
                 'file' => $file,
             ])
             ->assertCreated();
@@ -290,7 +290,7 @@ it('cascades attachment files and rows when a card is hard-deleted', function ()
 
     // Hard delete the card.
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
         ->assertNoContent();
 
     foreach ($paths as $path) {
@@ -309,7 +309,7 @@ it('rolls back the card row deletion if the cascade file delete throws', functio
     // Upload one attachment to set up the cascade path.
     $file = UploadedFile::fake()->image('photo.jpg', 10, 10)->size(50);
     $this->actingAs($owner, 'sanctum')
-        ->post("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
+        ->post(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
             'file' => $file,
         ])
         ->assertCreated();
@@ -323,7 +323,7 @@ it('rolls back the card row deletion if the cascade file delete throws', functio
     Storage::shouldReceive('delete')->andThrow(new RuntimeException('disk write failure'));
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}")
         ->assertStatus(500);
 
     // Transaction rolled back — card and attachment row must still exist.
@@ -354,7 +354,7 @@ it('enforces the mime allowlist per the param dataset', function (bool $blocked,
     $file = UploadedFile::fake()->create($name, 5, $mime);
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->post("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
+        ->post(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
             'file' => $file,
         ]);
 
@@ -382,7 +382,7 @@ it('uploads via Sanctum bearer token end-to-end with 201', function (): void {
     $file = UploadedFile::fake()->image('bearer.jpg', 10, 10)->size(50);
 
     $response = $this->withHeaders(['Authorization' => 'Bearer '.$token])
-        ->post("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
+        ->post(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
             'file' => $file,
         ]);
 
@@ -400,7 +400,7 @@ it('exposes the resource shape with id, card_id, uploader_id, original_filename,
     $file = UploadedFile::fake()->image('shape.jpg', 10, 10)->size(50);
 
     $this->actingAs($owner, 'sanctum')
-        ->post("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
+        ->post(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/attachments", [
             'file' => $file,
         ])
         ->assertCreated()

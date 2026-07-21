@@ -13,6 +13,7 @@ use App\Models\KanbanBoard;
 use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
 use App\Models\Project;
+use App\Models\Task;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 
@@ -42,6 +43,7 @@ final class CardMoveController extends Controller
     public function move(
         MoveCardRequest $request,
         Project $project,
+        Task $task,
         KanbanBoard $board,
         KanbanColumn $column,
         KanbanCard $card,

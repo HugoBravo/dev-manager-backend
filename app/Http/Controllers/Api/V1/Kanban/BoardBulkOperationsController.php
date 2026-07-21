@@ -13,6 +13,7 @@ use App\Http\Requests\Kanban\BulkRenameBoardsRequest;
 use App\Http\Resources\Kanban\BulkOperationResultResource;
 use App\Models\KanbanBoard;
 use App\Models\Project;
+use App\Models\Task;
 use App\Services\Kanban\BoardAuditLogger;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -44,7 +45,7 @@ final class BoardBulkOperationsController extends Controller
     /**
      * POST /api/v1/projects/{project}/kanban/boards/bulk-delete
      */
-    public function bulkDelete(BulkDeleteBoardsRequest $request, Project $project): JsonResponse
+    public function bulkDelete(BulkDeleteBoardsRequest $request, Project $project, ?Task $task = null): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
@@ -55,7 +56,7 @@ final class BoardBulkOperationsController extends Controller
         $logger = app(BoardAuditLogger::class);
 
         foreach ($ids as $id) {
-            $board = $this->resolveBoardForCaller($projectModel, $id);
+            $board = $this->resolveBoardForCaller($projectModel, $id, $task);
 
             if ($board === null) {
                 $results[] = [
@@ -99,7 +100,7 @@ final class BoardBulkOperationsController extends Controller
     /**
      * POST /api/v1/projects/{project}/kanban/boards/bulk-rename
      */
-    public function bulkRename(BulkRenameBoardsRequest $request, Project $project): JsonResponse
+    public function bulkRename(BulkRenameBoardsRequest $request, Project $project, ?Task $task = null): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
@@ -112,7 +113,7 @@ final class BoardBulkOperationsController extends Controller
         $logger = app(BoardAuditLogger::class);
 
         foreach ($ids as $id) {
-            $board = $this->resolveBoardForCaller($projectModel, $id);
+            $board = $this->resolveBoardForCaller($projectModel, $id, $task);
 
             if ($board === null) {
                 $results[] = [
@@ -175,13 +176,19 @@ final class BoardBulkOperationsController extends Controller
      * soft-deleted row — callers translate `null` into a 404 result entry
      * (no existence leak).
      */
-    private function resolveBoardForCaller(Project $project, int $id): ?KanbanBoard
+    private function resolveBoardForCaller(Project $project, int $id, ?Task $task = null): ?KanbanBoard
     {
         try {
-            return KanbanBoard::query()
-                ->where('project_id', $project->id)
-                ->whereKey($id)
-                ->firstOrFail();
+            $query = KanbanBoard::query()
+                ->whereKey($id);
+
+            if ($task !== null) {
+                $query->where('task_id', $task->id);
+            } else {
+                $query->where('project_id', $project->id);
+            }
+
+            return $query->firstOrFail();
         } catch (ModelNotFoundException) {
             return null;
         }

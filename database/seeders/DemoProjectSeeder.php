@@ -10,6 +10,7 @@ use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
 use App\Models\KanbanComment;
 use App\Models\Project;
+use App\Models\Task;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Http\UploadedFile;
@@ -83,10 +84,35 @@ final class DemoProjectSeeder extends Seeder
 
     private function findOrCreateBoard(Project $project): KanbanBoard
     {
+        $task = $this->findOrCreateDefaultTask($project);
+
         return KanbanBoard::query()->updateOrCreate(
             ['project_id' => $project->id, 'name' => 'Demo Board'],
             [
+                'task_id' => $task->id,
                 'position' => 'm',
+                'archived_at' => null,
+            ],
+        );
+    }
+
+    /**
+     * Find or create the canonical "default" task under a project. Every
+     * kanban chain URL assumes a `{task}` segment resolves to a Task under
+     * the requested project; without a default task the chain URL is
+     * unresolvable and the controllers return 404. The migration that
+     * reparents existing boards also creates a default task per project,
+     * but a fresh-DB seeder must do the same explicitly because the
+     * migration's reparent loop only fires when boards already exist.
+     */
+    private function findOrCreateDefaultTask(Project $project): Task
+    {
+        return Task::query()->updateOrCreate(
+            ['project_id' => $project->id, 'slug' => 'default'],
+            [
+                'name' => 'Default',
+                'status' => 'open',
+                'description' => 'Canonical default task grouping the project kanban boards.',
                 'archived_at' => null,
             ],
         );

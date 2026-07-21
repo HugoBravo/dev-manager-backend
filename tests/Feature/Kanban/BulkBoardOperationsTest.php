@@ -16,8 +16,8 @@ it('returns 401 on the bulk endpoints without a bearer token', function (string 
 
     $response->assertUnauthorized();
 })->with([
-    'bulk-delete' => ['POST', '/api/v1/projects/1/kanban/boards/bulk-delete'],
-    'bulk-rename' => ['POST', '/api/v1/projects/1/kanban/boards/bulk-rename'],
+    'bulk-delete' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/bulk-delete'],
+    'bulk-rename' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/bulk-rename'],
 ]);
 
 it('bulk-deletes all empty boards and returns per-item 204 entry in the results map', function (): void {
@@ -28,7 +28,7 @@ it('bulk-deletes all empty boards and returns per-item 204 entry in the results 
     $b3 = KanbanBoard::factory()->forProject($project)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/bulk-delete", [
+        ->postJson(kanbanPrefix($project).'/boards/bulk-delete', [
             'ids' => [$b1->id, $b2->id, $b3->id],
         ])
         ->assertOk();
@@ -72,7 +72,7 @@ it('bulk-delete returns 409 per item for boards with contents and 404 for foreig
     );
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/bulk-delete", [
+        ->postJson(kanbanPrefix($project).'/boards/bulk-delete', [
             'ids' => [$good->id, 999999],
         ])
         ->assertOk();
@@ -101,7 +101,7 @@ it('bulk-rename adds a prefix to all boards', function (): void {
     $b2 = KanbanBoard::factory()->forProject($project)->create(['name' => 'Sprint 2']);
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/bulk-rename", [
+        ->postJson(kanbanPrefix($project).'/boards/bulk-rename', [
             'ids' => [$b1->id, $b2->id],
             'prefix' => 'v2-',
             'mode' => 'add',
@@ -126,7 +126,7 @@ it('bulk-rename reports 422 name_taken on the first collision and continues', fu
     $b2 = KanbanBoard::factory()->forProject($project)->create(['name' => 'Sprint 2']);
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/bulk-rename", [
+        ->postJson(kanbanPrefix($project).'/boards/bulk-rename', [
             'ids' => [$b1->id, $b2->id],
             'prefix' => 'v2-',
             'mode' => 'add',
@@ -154,7 +154,7 @@ it('rejects 422 max_100 on 101 ids', function (): void {
     $project = Project::factory()->forOwner($owner)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/bulk-delete", [
+        ->postJson(kanbanPrefix($project).'/boards/bulk-delete', [
             'ids' => range(1, 101),
         ])
         ->assertStatus(422)
@@ -166,7 +166,7 @@ it('rejects 422 on empty ids array', function (): void {
     $project = Project::factory()->forOwner($owner)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/bulk-delete", [
+        ->postJson(kanbanPrefix($project).'/boards/bulk-delete', [
             'ids' => [],
         ])
         ->assertStatus(422)
@@ -180,7 +180,7 @@ it('bulk-rename remove mode strips the prefix when present', function (): void {
     $b2 = KanbanBoard::factory()->forProject($project)->create(['name' => 'v2-Sprint 2']);
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/bulk-rename", [
+        ->postJson(kanbanPrefix($project).'/boards/bulk-rename', [
             'ids' => [$b1->id, $b2->id],
             'prefix' => 'v2-',
             'mode' => 'remove',
@@ -202,7 +202,7 @@ it('bulk-rename remove mode is no-op (200) when prefix is not present', function
     $b = KanbanBoard::factory()->forProject($project)->create(['name' => 'Sprint 1']);
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/bulk-rename", [
+        ->postJson(kanbanPrefix($project).'/boards/bulk-rename', [
             'ids' => [$b->id],
             'prefix' => 'v2-',
             'mode' => 'remove',
@@ -222,7 +222,7 @@ it('bulk-rename rejects 422 when mode is not in add|remove', function (): void {
     $b = KanbanBoard::factory()->forProject($project)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/bulk-rename", [
+        ->postJson(kanbanPrefix($project).'/boards/bulk-rename', [
             'ids' => [$b->id],
             'prefix' => 'v2-',
             'mode' => 'OVERWRITE',
@@ -237,7 +237,7 @@ it('bulk-rename rejects 422 when prefix is missing or too long', function (): vo
 
     // Missing prefix
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/bulk-rename", [
+        ->postJson(kanbanPrefix($project).'/boards/bulk-rename', [
             'ids' => [1],
             'mode' => 'add',
         ])
@@ -246,7 +246,7 @@ it('bulk-rename rejects 422 when prefix is missing or too long', function (): vo
 
     // Prefix > 50 chars
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/bulk-rename", [
+        ->postJson(kanbanPrefix($project).'/boards/bulk-rename', [
             'ids' => [1],
             'mode' => 'add',
             'prefix' => str_repeat('a', 51),

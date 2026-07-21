@@ -36,11 +36,11 @@ it('returns 401 on every comment endpoint without a bearer token', function (str
 
     $response->assertUnauthorized();
 })->with([
-    'index' => ['GET', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/1/comments'],
-    'store' => ['POST', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/1/comments'],
-    'show' => ['GET', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/1/comments/1'],
-    'update' => ['PATCH', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/1/comments/1'],
-    'destroy' => ['DELETE', '/api/v1/projects/1/kanban/boards/1/columns/1/cards/1/comments/1'],
+    'index' => ['GET', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/1/comments'],
+    'store' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/1/comments'],
+    'show' => ['GET', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/1/comments/1'],
+    'update' => ['PATCH', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/1/comments/1'],
+    'destroy' => ['DELETE', '/api/v1/projects/1/tasks/1/kanban/boards/1/columns/1/cards/1/comments/1'],
 ]);
 
 it('lists comments for a card as a paginated envelope with 25 per page', function (): void {
@@ -52,7 +52,7 @@ it('lists comments for a card as a paginated envelope with 25 per page', functio
     KanbanComment::factory()->forCard($card)->byAuthor($owner)->count(3)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments")
         ->assertOk();
 
     expect($response->json('data'))->toHaveCount(3)
@@ -71,7 +71,7 @@ it('filters comments by parent_id', function (): void {
     KanbanComment::factory()->forCard($card)->byAuthor($owner)->count(2)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments?parent_id={$root->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments?parent_id={$root->id}")
         ->assertOk();
 
     expect($response->json('data'))->toHaveCount(2);
@@ -85,7 +85,7 @@ it('creates a top-level comment with 201 and default author', function (): void 
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
             'body' => 'My first comment',
         ])
         ->assertCreated();
@@ -110,7 +110,7 @@ it('rejects create with empty body string', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
             'body' => '',
         ])
         ->assertStatus(422)
@@ -125,7 +125,7 @@ it('rejects create with body longer than 5000 chars', function (): void {
     $card = KanbanCard::factory()->forColumn($column)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
             'body' => str_repeat('a', 5001),
         ])
         ->assertStatus(422)
@@ -142,7 +142,7 @@ it('accepts body with HTML tags stored verbatim (canonical text, no raw-injectio
     $body = '<b>bold</b> and <script>alert(1)</script>';
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
             'body' => $body,
         ])
         ->assertCreated();
@@ -159,7 +159,7 @@ it('accepts a same-author reply as a child comment on the parents own root', fun
     $root = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
             'body' => 'Same-author reply',
             'parent_id' => $root->id,
         ])
@@ -189,7 +189,7 @@ it('rejects a parent_id owned by a different author (cross-author thread banned 
     ]);
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
             'body' => 'Reply to stranger',
             'parent_id' => $root->id,
         ])
@@ -208,7 +208,7 @@ it('rejects a parent_id that belongs to a comment on a different card (cross-car
     $rootOnB = KanbanComment::factory()->forCard($cardB)->byAuthor($owner)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$cardA->id}/comments", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$cardA->id}/comments", [
             'body' => 'cross-card parent',
             'parent_id' => $rootOnB->id,
         ])
@@ -229,7 +229,7 @@ it('renders thread-per-author: same-author reply uses parent_id and appears unde
     $root = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     $child = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments", [
             'body' => 'child 1',
             'parent_id' => $root->id,
         ])
@@ -238,7 +238,7 @@ it('renders thread-per-author: same-author reply uses parent_id and appears unde
     expect($child->json('data.parent_id'))->toBe($root->id);
 
     $list = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments")
         ->assertOk();
 
     // 2 comments total — the original root (parent_id null) and the child
@@ -260,7 +260,7 @@ it('updates a comment by its author within the edit window', function (): void {
     Carbon::setTestNow(now());
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}", [
             'body' => 'Edited within window',
         ])
         ->assertOk();
@@ -285,7 +285,7 @@ it('returns 404 (binding fires first) when a non-owner tries to edit a comment i
     // is exercised at the policy layer in CommentPolicyTest; it will fire
     // for in-project members once a future change adds the `members` pivot.
     $this->actingAs($stranger, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}", [
             'body' => 'stranger edit attempt',
         ])
         ->assertNotFound();
@@ -304,7 +304,7 @@ it('returns 422 when a comment edit lands beyond the configured edit window', fu
     Carbon::setTestNow($commentCreatedAt->copy()->addMinutes((int) config('kanban.comment_edit_window_minutes') + 1));
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}", [
             'body' => 'too late',
         ])
         ->assertStatus(422)
@@ -327,7 +327,7 @@ it('honors the configured edit window value (env override of 1 minute flips the 
     Carbon::setTestNow();
 
     $this->actingAs($owner, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}", [
             'body' => 'edited',
         ])
         ->assertStatus(422);
@@ -346,7 +346,7 @@ it('destroys a comment by its author inside the window with 204', function (): v
     Carbon::setTestNow(now());
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}")
         ->assertNoContent();
 
     expect($comment->fresh())->toBeNull();
@@ -367,7 +367,7 @@ it('returns 422 when a comment delete lands beyond the window', function (): voi
     Carbon::setTestNow($created->copy()->addMinutes((int) config('kanban.comment_edit_window_minutes') + 5));
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}")
         ->assertStatus(422);
 
     expect($comment->fresh())->not->toBeNull();
@@ -387,7 +387,7 @@ it('returns 404 when a non-owner tries to delete a comment (binding fires first)
     Carbon::setTestNow(now());
 
     $this->actingAs($stranger, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}")
         ->assertNotFound();
 
     expect($comment->fresh())->not->toBeNull();
@@ -405,7 +405,7 @@ it('returns 404 when a stranger (cross-owner) tries to show a comment', function
     $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}")
         ->assertNotFound();
 });
 
@@ -419,7 +419,7 @@ it('returns 404 when the binding closure fires for a comment on another users pr
     $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     $this->actingAs($stranger, 'sanctum')
-        ->patchJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}", [
+        ->patchJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}", [
             'body' => 'nope',
         ])
         ->assertNotFound();
@@ -437,7 +437,7 @@ it('returns 404 when fetching a comment via a card that belongs to a different c
     $comment = KanbanComment::factory()->forCard($cardA)->byAuthor($owner)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$cardB->id}/comments/{$comment->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$cardB->id}/comments/{$comment->id}")
         ->assertNotFound();
 });
 
@@ -450,7 +450,7 @@ it('exposes the resource shape with id, card_id, author_id, parent_id, body, tim
     $comment = KanbanComment::factory()->forCard($card)->byAuthor($owner)->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/comments/{$comment->id}")
         ->assertOk()
         ->assertJsonStructure([
             'data' => [

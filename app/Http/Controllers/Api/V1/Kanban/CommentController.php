@@ -14,6 +14,7 @@ use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
 use App\Models\KanbanComment;
 use App\Models\Project;
+use App\Models\Task;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -45,7 +46,7 @@ final class CommentController extends Controller
      * `?parent_id=` filter (returns the children of a specific parent root).
      * R1: archived project → empty list unless `?include_archived=1`.
      */
-    public function index(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function index(Request $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -76,7 +77,7 @@ final class CommentController extends Controller
      * Show a single comment. Cross-owner -> 404.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function show(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanComment $comment): JsonResponse
+    public function show(Request $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanComment $comment): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -99,7 +100,7 @@ final class CommentController extends Controller
      * cross-author parent_id. The author is the authenticated user.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function store(StoreCommentRequest $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function store(StoreCommentRequest $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -125,7 +126,7 @@ final class CommentController extends Controller
      * Kanban\UpdateCommentRequest::withValidator() and the policy respectively.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function update(UpdateCommentRequest $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanComment $comment): JsonResponse
+    public function update(UpdateCommentRequest $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanComment $comment): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -154,7 +155,7 @@ final class CommentController extends Controller
      * returns 422 instead of silently succeeding.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function destroy(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanComment $comment): Response
+    public function destroy(Request $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanComment $comment): Response
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);

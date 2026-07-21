@@ -21,7 +21,7 @@ beforeEach(function (): void {
 
 function cardLabelsSyncPath(KanbanCard $card, KanbanBoard $board, KanbanColumn $column, Project $project): string
 {
-    return "/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/labels";
+    return kanbanPrefix($project)."/boards/{$board->id}/columns/{$column->id}/cards/{$card->id}/labels";
 }
 
 it('returns 401 on the card labels sync endpoint without a bearer token', function (): void {
@@ -123,7 +123,7 @@ it('returns 404 when syncing labels on a card from a different column on the sam
 
     $this->actingAs($this->owner, 'sanctum')
         ->putJson(
-            "/api/v1/projects/{$this->project->id}/kanban/boards/{$this->board->id}/columns/{$otherColumn->id}/cards/{$this->card->id}/labels",
+            kanbanPrefix($this->project)."/boards/{$this->board->id}/columns/{$otherColumn->id}/cards/{$this->card->id}/labels",
             ['label_ids' => [$label->id]],
         )
         ->assertNotFound();
@@ -145,7 +145,7 @@ it('exposes labels in the card resource when listing cards of a column', functio
     $this->card->labels()->attach($label->id);
 
     $response = $this->actingAs($this->owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$this->project->id}/kanban/boards/{$this->board->id}/columns/{$this->column->id}/cards")
+        ->getJson(kanbanPrefix($this->project)."/boards/{$this->board->id}/columns/{$this->column->id}/cards")
         ->assertOk();
 
     $first = $response->json('data.0.data');
@@ -156,7 +156,7 @@ it('exposes labels in the card resource when listing cards of a column', functio
 
 it('exposes labels as an empty array when the card has no labels', function (): void {
     $this->actingAs($this->owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$this->project->id}/kanban/boards/{$this->board->id}/columns/{$this->column->id}/cards/{$this->card->id}")
+        ->getJson(kanbanPrefix($this->project)."/boards/{$this->board->id}/columns/{$this->column->id}/cards/{$this->card->id}")
         ->assertOk()
         ->assertJsonPath('data.labels', []);
 });

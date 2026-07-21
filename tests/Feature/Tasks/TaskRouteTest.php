@@ -5,8 +5,15 @@ declare(strict_types=1);
 use Illuminate\Routing\Route as RouteDefinition;
 
 it('registers the task lifecycle routes beneath a project', function (): void {
+    // Filter by route NAME with a regex anchored to the six task lifecycle
+    // verbs. Kanban chain routes (`api.v1.projects.tasks.kanban.*`) also
+    // share the `api.v1.projects.tasks.` prefix, so a `str_starts_with`
+    // filter would over-match.
     $routes = collect(app('router')->getRoutes()->getRoutes())
-        ->filter(fn (RouteDefinition $route): bool => str_contains($route->uri(), 'projects/{project}/tasks'));
+        ->filter(fn (RouteDefinition $route): bool => (bool) preg_match(
+            '/^api\.v1\.projects\.tasks\.(index|store|show|update|archive|restore)$/',
+            (string) $route->getName(),
+        ));
 
     expect($routes)->toHaveCount(6);
 

@@ -17,8 +17,8 @@ it('returns 401 on every soft-delete / restore / trash endpoint without a bearer
 
     $response->assertUnauthorized();
 })->with([
-    'restore' => ['POST', '/api/v1/projects/1/kanban/boards/1/restore'],
-    'trashed' => ['GET', '/api/v1/projects/1/kanban/boards/trashed'],
+    'restore' => ['POST', '/api/v1/projects/1/tasks/1/kanban/boards/1/restore'],
+    'trashed' => ['GET', '/api/v1/projects/1/tasks/1/kanban/boards/trashed'],
 ]);
 
 it('soft-deletes an empty board and excludes it from default index', function (): void {
@@ -27,13 +27,13 @@ it('soft-deletes an empty board and excludes it from default index', function ()
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertNoContent();
 
     $this->assertSoftDeleted('kanban_boards', ['id' => $board->id]);
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards")
+        ->getJson(kanbanPrefix($project).'/boards')
         ->assertOk();
 
     $ids = collect($response->json('data'))
@@ -69,7 +69,7 @@ it('returns 409 board_has_contents when soft-deleting a non-empty board', functi
     );
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertStatus(409);
 
     expect($response->json('code'))->toBe('board_has_contents');
@@ -86,13 +86,13 @@ it('restores a soft-deleted board within the restore window', function (): void 
 
     // Trashed first so we exercise the restore path.
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$board->id}")
         ->assertNoContent();
     $this->assertSoftDeleted('kanban_boards', ['id' => $board->id]);
 
     // Restore via the explicit endpoint.
     $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/restore")
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/restore")
         ->assertOk()
         ->assertJsonPath('data.id', $board->id)
         ->assertJsonPath('data.name', $board->name);
@@ -103,7 +103,7 @@ it('restores a soft-deleted board within the restore window', function (): void 
 
     // Default index now contains it again (excludes trashed by default).
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards")
+        ->getJson(kanbanPrefix($project).'/boards')
         ->assertOk();
 
     $ids = collect($response->json('data'))
@@ -119,7 +119,7 @@ it('returns 422 not_trashed when restoring an active board', function (): void {
     $board = KanbanBoard::factory()->for($project, 'project')->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/restore")
+        ->postJson(kanbanPrefix($project)."/boards/{$board->id}/restore")
         ->assertStatus(422);
 
     expect($response->json('code'))->toBe('not_trashed');
@@ -137,24 +137,24 @@ it('lists trashed boards paginated newest-first', function (): void {
     $active = KanbanBoard::factory()->for($project, 'project')->create();
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$old->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$old->id}")
         ->assertNoContent();
     $old->fresh()->deleted_at = now()->subDays(3);
     // Manual write to keep the deleted_at ordering deterministic.
     DB::table('kanban_boards')->where('id', $old->id)->update(['deleted_at' => now()->subDays(3)]);
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$mid->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$mid->id}")
         ->assertNoContent();
     DB::table('kanban_boards')->where('id', $mid->id)->update(['deleted_at' => now()->subDays(2)]);
 
     $this->actingAs($owner, 'sanctum')
-        ->deleteJson("/api/v1/projects/{$project->id}/kanban/boards/{$new->id}")
+        ->deleteJson(kanbanPrefix($project)."/boards/{$new->id}")
         ->assertNoContent();
     DB::table('kanban_boards')->where('id', $new->id)->update(['deleted_at' => now()->subDay()]);
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/trashed")
+        ->getJson(kanbanPrefix($project).'/boards/trashed')
         ->assertOk();
 
     $ids = collect($response->json('data'))

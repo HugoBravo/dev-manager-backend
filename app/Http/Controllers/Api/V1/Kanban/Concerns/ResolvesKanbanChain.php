@@ -8,6 +8,7 @@ use App\Models\KanbanBoard;
 use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
 use App\Models\Project;
+use App\Models\Task;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 
@@ -51,7 +52,24 @@ trait ResolvesKanbanChain
 
     private function ensureBoardBelongsToProject(KanbanBoard $board, Project $project): void
     {
+        $task = request()->route('task');
+        if ($task instanceof Task) {
+            $this->ensureBoardBelongsToTask($board, $task);
+
+            return;
+        }
+
         if ($board->project_id !== $project->id) {
+            throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$board->id]);
+        }
+    }
+
+    /**
+     * Throw 404 when the board is not owned by the task in the URL chain.
+     */
+    private function ensureBoardBelongsToTask(KanbanBoard $board, Task $task): void
+    {
+        if ($board->task_id !== $task->id) {
             throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$board->id]);
         }
     }

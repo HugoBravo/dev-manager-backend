@@ -17,16 +17,16 @@ it('returns paginated audit log newest first', function (): void {
     // Seed three audit rows via the real writer path. Each call toggles the
     // board's archived_at and writes a distinct action row (archive is the
     // first; the next call unarchives; the third re-archives).
-    $this->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/archive")
+    $this->postJson(kanbanPrefix($project)."/boards/{$board->id}/archive")
         ->assertOk();
 
-    $this->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/archive")
+    $this->postJson(kanbanPrefix($project)."/boards/{$board->id}/archive")
         ->assertOk();
 
-    $this->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/archive")
+    $this->postJson(kanbanPrefix($project)."/boards/{$board->id}/archive")
         ->assertOk();
 
-    $response = $this->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/audit")
+    $response = $this->getJson(kanbanPrefix($project)."/boards/{$board->id}/audit")
         ->assertOk();
 
     // Laravel standard pagination envelope (data + links + meta).
@@ -71,7 +71,7 @@ it('paginates with 25 entries per page', function (): void {
         ->create();
 
     $page1 = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/audit?page=1")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/audit?page=1")
         ->assertOk();
 
     expect($page1->json('data'))->toHaveCount(25);
@@ -79,7 +79,7 @@ it('paginates with 25 entries per page', function (): void {
     expect($page1->json('meta.total'))->toBeGreaterThanOrEqual(30);
 
     $page2 = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/audit?page=2")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/audit?page=2")
         ->assertOk();
 
     expect($page2->json('data'))->toHaveCount(5);
@@ -104,7 +104,7 @@ it('returns 404 when board belongs to a different owner', function (): void {
 
     // 404, never 403 — matches the cross-owner convention.
     $this->actingAs($stranger, 'sanctum')
-        ->getJson("/api/v1/projects/{$project->id}/kanban/boards/{$board->id}/audit")
+        ->getJson(kanbanPrefix($project)."/boards/{$board->id}/audit")
         ->assertNotFound();
 });
 
@@ -141,7 +141,7 @@ it('records audit on clone for both source and new board', function (): void {
         ->create();
 
     $response = $this->actingAs($owner, 'sanctum')
-        ->postJson("/api/v1/projects/{$project->id}/kanban/boards/{$source->id}/clone")
+        ->postJson(kanbanPrefix($project)."/boards/{$source->id}/clone")
         ->assertCreated();
 
     $newId = (int) $response->json('data.id');

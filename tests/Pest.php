@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Project;
+use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -50,10 +52,18 @@ function something()
     // ..
 }
 
-/**
- * Issue a Sanctum personal access token for $user with $deviceName.
- * Returns the plaintext "id|secret" token for use in `withToken()`.
- */
+function kanbanPrefix(Project $project, ?string $projectKey = null): string
+{
+    $task = $project->tasks()->where('slug', 'default')->first();
+    if ($task === null) {
+        $task = Task::factory()->default()->create(['project_id' => $project->id]);
+    }
+
+    $projectKey ??= (string) $project->id;
+
+    return "/api/v1/projects/{$projectKey}/tasks/{$task->id}/kanban";
+}
+
 function bearerFor(User $user, string $deviceName = 'phpunit'): string
 {
     return $user->createToken($deviceName)->plainTextToken;

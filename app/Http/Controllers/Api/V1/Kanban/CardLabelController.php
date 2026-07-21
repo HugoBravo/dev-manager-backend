@@ -12,6 +12,7 @@ use App\Models\KanbanBoard;
 use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
 use App\Models\Project;
+use App\Models\Task;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -39,6 +40,7 @@ final class CardLabelController extends Controller
     public function sync(
         SyncCardLabelsRequest $request,
         Project $project,
+        Task $task,
         KanbanBoard $board,
         KanbanColumn $column,
         KanbanCard $card,

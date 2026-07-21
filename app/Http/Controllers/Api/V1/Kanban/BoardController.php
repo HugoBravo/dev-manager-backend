@@ -18,6 +18,7 @@ use App\Http\Resources\Kanban\BoardResource;
 use App\Models\KanbanBoard;
 use App\Models\KanbanColumn;
 use App\Models\Project;
+use App\Models\Task;
 use App\Services\Kanban\BoardAuditLogger;
 use App\ValueObjects\Kanban\Position;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -52,7 +53,7 @@ final class BoardController extends Controller
      * R1: when the project itself is archived, the list is empty unless the
      * caller passes `?include_archived=1`.
      */
-    public function index(Request $request, Project $project): JsonResponse
+    public function index(Request $request, Project $project, Task $task): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
 
@@ -64,7 +65,7 @@ final class BoardController extends Controller
         }
 
         $boards = KanbanBoard::query()
-            ->where('project_id', $projectModel->id)
+            ->where('task_id', $task->id)
             ->whereNull('archived_at')
             ->orderBy('position')
             ->paginate(25);
@@ -80,16 +81,17 @@ final class BoardController extends Controller
      * triggers a rebalance: rewrite every board's position to a fresh
      * indexed sequence and retry the append once (Batch 1.6 brief).
      */
-    public function store(StoreBoardRequest $request, Project $project): JsonResponse
+    public function store(StoreBoardRequest $request, Project $project, Task $task): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
 
         try {
-            $board = DB::transaction(function () use ($request, $projectModel): KanbanBoard {
+            $board = DB::transaction(function () use ($request, $projectModel, $task): KanbanBoard {
                 $nextPosition = $this->nextPositionForProject($projectModel);
 
                 return KanbanBoard::query()->create([
                     'project_id' => $projectModel->id,
+                    'task_id' => $task->id,
                     'name' => $request->validated('name'),
                     'position' => $nextPosition,
                 ]);
@@ -99,11 +101,12 @@ final class BoardController extends Controller
                 $this->rebalanceProjectPositions($projectModel);
             });
 
-            $board = DB::transaction(function () use ($request, $projectModel): KanbanBoard {
+            $board = DB::transaction(function () use ($request, $projectModel, $task): KanbanBoard {
                 $nextPosition = $this->nextPositionForProject($projectModel);
 
                 return KanbanBoard::query()->create([
                     'project_id' => $projectModel->id,
+                    'task_id' => $task->id,
                     'name' => $request->validated('name'),
                     'position' => $nextPosition,
                 ]);
@@ -117,7 +120,7 @@ final class BoardController extends Controller
      * Show one board (cross-owner -> 404 via binding closure).
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
-    public function show(Request $request, Project $project, KanbanBoard $board): JsonResponse
+    public function show(Request $request, Project $project, Task $task, KanbanBoard $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -137,7 +140,7 @@ final class BoardController extends Controller
      *
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
-    public function update(UpdateBoardRequest $request, Project $project, KanbanBoard $board): JsonResponse
+    public function update(UpdateBoardRequest $request, Project $project, Task $task, KanbanBoard $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -165,7 +168,7 @@ final class BoardController extends Controller
      * because there's nothing to count — Batch 3 lands the real check.
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
-    public function destroy(Request $request, Project $project, KanbanBoard $board): Response
+    public function destroy(Request $request, Project $project, Task $task, KanbanBoard $board): Response
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -204,7 +207,7 @@ final class BoardController extends Controller
      *
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
-    public function archive(Request $request, Project $project, KanbanBoard $board): JsonResponse
+    public function archive(Request $request, Project $project, Task $task, KanbanBoard $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -229,7 +232,7 @@ final class BoardController extends Controller
      * The source board is left untouched. A trashed source returns 404 (the
      * default `{board}` binding closure filters soft-deleted rows).
      */
-    public function clone(CloneBoardRequest $request, Project $project, KanbanBoard $board): JsonResponse
+    public function clone(CloneBoardRequest $request, Project $project, Task $task, KanbanBoard $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -239,13 +242,14 @@ final class BoardController extends Controller
         $sourceName = $board->name;
         $desiredName = trim((string) $request->input('name', ''));
         $finalName = $desiredName !== '' ? $desiredName : "{$sourceName} (Copy)";
-        $finalName = $this->resolveCloneNameCollision($projectModel, $finalName);
+        $finalName = $this->resolveCloneNameCollision($projectModel, $task, $finalName);
 
-        $clone = DB::transaction(function () use ($projectModel, $board, $finalName): KanbanBoard {
+        $clone = DB::transaction(function () use ($projectModel, $board, $task, $finalName): KanbanBoard {
             $position = $this->nextPositionForProject($projectModel);
 
             $new = KanbanBoard::query()->create([
                 'project_id' => $projectModel->id,
+                'task_id' => $task->id,
                 'name' => $finalName,
                 'position' => $position,
             ]);
@@ -293,10 +297,10 @@ final class BoardController extends Controller
      * Append "(Copy N)" until the name is unique in the project (active
      * rows only). The starting "$candidate" is tried as-is first.
      */
-    private function resolveCloneNameCollision(Project $project, string $candidate): string
+    private function resolveCloneNameCollision(Project $project, Task $task, string $candidate): string
     {
         $exists = fn (string $name): bool => KanbanBoard::query()
-            ->where('project_id', $project->id)
+            ->where('task_id', $task->id)
             ->where('name', $name)
             ->whereNull('deleted_at')
             ->exists();
@@ -333,7 +337,7 @@ final class BoardController extends Controller
      *
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
-    public function reorder(ReorderBoardsRequest $request, Project $project): JsonResponse
+    public function reorder(ReorderBoardsRequest $request, Project $project, Task $task): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
@@ -342,13 +346,13 @@ final class BoardController extends Controller
 
         $logger = app(BoardAuditLogger::class);
 
-        DB::transaction(function () use ($orderedIds, $projectModel, $logger): void {
+        DB::transaction(function () use ($orderedIds, $task, $logger): void {
             // Read current positions BEFORE the update so the audit payload
             // can record `from_position` accurately. Limited to the ids in
             // the request to keep the query scope tight.
             $current = KanbanBoard::query()
                 ->whereIn('id', $orderedIds)
-                ->where('project_id', $projectModel->id)
+                ->where('task_id', $task->id)
                 ->pluck('position', 'id');
 
             foreach ($orderedIds as $index => $boardId) {
@@ -357,7 +361,7 @@ final class BoardController extends Controller
 
                 KanbanBoard::query()
                     ->whereKey($boardId)
-                    ->where('project_id', $projectModel->id)
+                    ->where('task_id', $task->id)
                     ->update(['position' => $to]);
 
                 $logger->record(
@@ -380,7 +384,7 @@ final class BoardController extends Controller
      * an already-active board returns 422 BoardNotTrashedException.
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
-    public function restore(Request $request, Project $project, KanbanBoard $board): JsonResponse
+    public function restore(Request $request, Project $project, Task $task, KanbanBoard $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
@@ -390,7 +394,7 @@ final class BoardController extends Controller
         $trashed = KanbanBoard::query()
             ->withoutGlobalScope(SoftDeletingScope::class)
             ->whereKey($board->getKey())
-            ->where('project_id', $projectModel->id)
+            ->where('task_id', $task->id)
             ->first();
 
         if ($trashed === null) {
@@ -417,14 +421,14 @@ final class BoardController extends Controller
      * SoftDeletes global scope — this endpoint drops it for the single query.
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
-    public function trashed(Request $request, Project $project): JsonResponse
+    public function trashed(Request $request, Project $project, Task $task): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureNotArchivedProject($request, $projectModel, Project::class, $project->getKey());
 
         $boards = KanbanBoard::query()
             ->withoutGlobalScope(SoftDeletingScope::class)
-            ->where('project_id', $projectModel->id)
+            ->where('task_id', $task->id)
             ->whereNotNull('deleted_at')
             ->orderByDesc('deleted_at')
             ->paginate(25);
@@ -444,7 +448,7 @@ final class BoardController extends Controller
      *
      * R1: archived project returns 404 unless `?include_archived=1`.
      */
-    public function audit(Request $request, Project $project, KanbanBoard $board): JsonResponse
+    public function audit(Request $request, Project $project, Task $task, KanbanBoard $board): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -474,6 +478,15 @@ final class BoardController extends Controller
      */
     private function ensureBoardBelongsToProject(KanbanBoard $board, Project $project): void
     {
+        $task = request()->route('task');
+        if ($task instanceof Task) {
+            if ($board->task_id !== $task->id) {
+                throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$board->id]);
+            }
+
+            return;
+        }
+
         if ($board->project_id !== $project->id) {
             throw (new ModelNotFoundException)->setModel(KanbanBoard::class, [$board->id]);
         }
@@ -495,8 +508,16 @@ final class BoardController extends Controller
      */
     private function nextPositionForProject(Project $project): string
     {
-        $rightmost = KanbanBoard::query()
-            ->where('project_id', $project->id)
+        $task = request()->route('task');
+        $query = KanbanBoard::query();
+
+        if ($task instanceof Task) {
+            $query->where('task_id', $task->id);
+        } else {
+            $query->where('project_id', $project->id);
+        }
+
+        $rightmost = $query
             ->lockForUpdate()
             ->orderByDesc('position')
             ->value('position');
@@ -516,8 +537,16 @@ final class BoardController extends Controller
      */
     private function rebalanceProjectPositions(Project $project): void
     {
-        $boardIds = KanbanBoard::query()
-            ->where('project_id', $project->id)
+        $task = request()->route('task');
+        $query = KanbanBoard::query();
+
+        if ($task instanceof Task) {
+            $query->where('task_id', $task->id);
+        } else {
+            $query->where('project_id', $project->id);
+        }
+
+        $boardIds = $query
             ->orderBy('position')
             ->orderBy('id')
             ->lockForUpdate()
@@ -525,10 +554,14 @@ final class BoardController extends Controller
             ->all();
 
         foreach ($boardIds as $index => $boardId) {
-            KanbanBoard::query()
-                ->whereKey($boardId)
-                ->where('project_id', $project->id)
-                ->update(['position' => $this->indexedPosition($index)]);
+            $query = KanbanBoard::query()->whereKey($boardId);
+            if ($task instanceof Task) {
+                $query->where('task_id', $task->id);
+            } else {
+                $query->where('project_id', $project->id);
+            }
+
+            $query->update(['position' => $this->indexedPosition($index)]);
         }
     }
 

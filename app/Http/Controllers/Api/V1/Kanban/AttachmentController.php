@@ -13,6 +13,7 @@ use App\Models\KanbanBoard;
 use App\Models\KanbanCard;
 use App\Models\KanbanColumn;
 use App\Models\Project;
+use App\Models\Task;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -51,7 +52,7 @@ final class AttachmentController extends Controller
      * List attachments of a card. Pagination page[size]=25 per the spec.
      * R1: archived project → empty list unless `?include_archived=1`.
      */
-    public function index(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function index(Request $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -88,7 +89,7 @@ final class AttachmentController extends Controller
      *   6. 201 + `Kanban\AttachmentResource`.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function store(StoreAttachmentRequest $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
+    public function store(StoreAttachmentRequest $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column, KanbanCard $card): JsonResponse
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
@@ -140,7 +141,7 @@ final class AttachmentController extends Controller
      * the response is atomic at the HTTP boundary.
      * R1: archived project → 404 unless `?include_archived=1`.
      */
-    public function destroy(Request $request, Project $project, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanAttachment $attachment): Response
+    public function destroy(Request $request, Project $project, Task $task, KanbanBoard $board, KanbanColumn $column, KanbanCard $card, KanbanAttachment $attachment): Response
     {
         $projectModel = $this->resolveOwnedProject($request, $project);
         $this->ensureBoardBelongsToProject($board, $projectModel);
