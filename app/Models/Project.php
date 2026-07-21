@@ -59,6 +59,14 @@ class Project extends Model
     }
 
     /**
+     * Tasks under this project.
+     */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
+    }
+
+    /**
      * Compute a unique slug for this Project. Uses the current (possibly
      * dirty) `slug` if present, otherwise derives from `name`, then appends
      * `-2`, `-3`, ... on collision. Skips this row's own id when checking
