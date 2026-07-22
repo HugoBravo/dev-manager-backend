@@ -107,10 +107,13 @@ return new class extends Migration
                     ->nullable(false)
                     ->change();
 
-                // Drop the FK + column. The schema builder auto-detects
-                // the FK by the column name + constrained table; Laravel
-                // 13 keeps both FK and index aligned.
-                $table->dropConstrainedForeignId('project_id');
+                // The table was renamed from `boards` to `kanban_boards`, but
+                // PostgreSQL preserves the original FK constraint name.
+                // Therefore the constraint is `boards_project_id_foreign`,
+                // not the name that `dropConstrainedForeignId()` would infer
+                // from the current table name.
+                $table->dropForeign('boards_project_id_foreign');
+                $table->dropColumn('project_id');
 
                 // Recreate the trash lookup on task_id instead of
                 // project_id so trashed-board listings under
@@ -149,9 +152,9 @@ return new class extends Migration
             });
 
             Schema::table('kanban_boards', function (Blueprint $table): void {
-                $table->foreignId('project_id')
-                    ->nullable()
-                    ->constrained('projects')
+                $table->foreign('project_id', 'boards_project_id_foreign')
+                    ->references('id')
+                    ->on('projects')
                     ->cascadeOnDelete();
 
                 // The reverse of the FK tighten above. Note this drops
