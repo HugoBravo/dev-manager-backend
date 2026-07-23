@@ -187,6 +187,8 @@ return new class extends Migration
                     $table->index(['deleted_at', 'project_id', 'position'], 'kanban_boards_trash_index');
                 });
 
+                DB::statement('DROP INDEX IF EXISTS kanban_boards_task_name_active_unique');
+
                 $predicate = in_array(DB::getDriverName(), ['pgsql', 'sqlite'], true)
                     ? ' WHERE deleted_at IS NULL'
                     : '';
@@ -250,6 +252,8 @@ return new class extends Migration
 
         // Re-create the stable active-name unique index lost when the
         // table was dropped and renamed. The predicate mirrors up().
+        DB::statement('DROP INDEX IF EXISTS kanban_boards_task_name_active_unique');
+
         $predicate = in_array(DB::getDriverName(), ['pgsql', 'sqlite'], true)
             ? ' WHERE deleted_at IS NULL'
             : '';

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 const DROP_PROJECT_ID_MIGRATION = 'database/migrations/2026_07_21_010000_drop_project_id_from_kanban_boards_table.php';
@@ -49,10 +50,34 @@ it('reapplies the forward migration without changing the latest schema contract'
         ->and($foreignKeys)->not->toContain('boards_project_id_foreign');
 });
 
+it('drops the active-name index before recreating it on repeated rollback cycles', function (): void {
+    expect(Artisan::call('migrate:fresh', ['--force' => true]))->toBe(0)
+        ->and(collect(Schema::getIndexes('kanban_boards'))->pluck('name'))
+        ->toContain('kanban_boards_task_name_active_unique');
+
+    DB::statement('DROP INDEX kanban_boards_task_name_active_unique');
+
+    expect(collect(Schema::getIndexes('kanban_boards'))->pluck('name'))
+        ->not->toContain('kanban_boards_task_name_active_unique')
+        ->and(Artisan::call('migrate:rollback', ['--step' => 2, '--force' => true]))->toBe(0)
+        ->and(collect(Schema::getIndexes('kanban_boards'))->pluck('name'))
+        ->toContain('kanban_boards_task_name_active_unique')
+        ->and(Artisan::call('migrate'))->toBe(0)
+        ->and(Artisan::call('migrate:rollback', ['--step' => 2, '--force' => true]))->toBe(0)
+        ->and(collect(Schema::getIndexes('kanban_boards'))->pluck('name'))
+        ->toContain('kanban_boards_task_name_active_unique')
+        ->and(Artisan::call('migrate'))->toBe(0);
+});
+
 it('documents snapshot recovery without claiming a factory hook', function (): void {
     $source = file_get_contents(base_path(DROP_PROJECT_ID_MIGRATION));
+    $dropIndexStatement = 'DROP INDEX IF EXISTS kanban_boards_task_name_active_unique';
+    $createIndexStatement = 'CREATE UNIQUE INDEX kanban_boards_task_name_active_unique';
 
     expect($source)->toBeString()
+        ->and(substr_count($source, $dropIndexStatement))->toBeGreaterThanOrEqual(3)
+        ->and(strpos($source, $dropIndexStatement, strpos($source, 'public function down')))
+        ->toBeLessThan(strpos($source, $createIndexStatement, strpos($source, 'public function down')))
         ->and($source)->not->toContain('afterMaking')
         ->and($source)->not->toContain('forProject()')
         ->and($source)->toContain('re-adds `project_id` as nullable without a FK')
