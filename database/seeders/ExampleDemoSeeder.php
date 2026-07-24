@@ -172,6 +172,7 @@ final class ExampleDemoSeeder extends Seeder
             [
                 'name' => 'Default',
                 'status' => 'open',
+                'priority' => 'MEDIUM',
                 'description' => null,
                 'archived_at' => null,
             ],

@@ -111,6 +111,7 @@ final class DemoProjectSeeder extends Seeder
             [
                 'name' => 'Default',
                 'status' => 'open',
+                'priority' => 'MEDIUM',
                 'description' => 'Canonical default task grouping the project kanban boards.',
                 'archived_at' => null,
             ],

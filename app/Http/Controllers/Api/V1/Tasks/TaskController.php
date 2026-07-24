@@ -41,6 +41,7 @@ final class TaskController extends Controller
             'slug' => $validated['slug'] ?? null,
             'description' => $validated['description'] ?? null,
             'status' => $validated['status'] ?? 'open',
+            'priority' => $validated['priority'] ?? 'MEDIUM',
         ]);
 
         return (new TaskResource($task))->response()->setStatusCode(201);

@@ -24,6 +24,7 @@ it('creates the task schema with the project-scoped slug contract', function ():
             'slug',
             'description',
             'status',
+            'priority',
             'archived_at',
             'created_at',
             'updated_at',
@@ -49,6 +50,15 @@ it('exposes project and board relationships and the required factory states', fu
     expect($task->project->is($project))->toBeTrue()
         ->and($task->boards())->toBeInstanceOf(HasMany::class)
         ->and(Task::factory()->archived()->make()->archived_at)->not->toBeNull();
+});
+
+it('fills priority and provides default, high, and low factory states', function (): void {
+    $task = (new Task)->fill(['priority' => 'LOW']);
+
+    expect($task->priority)->toBe('LOW')
+        ->and(Task::factory()->make()->priority)->toBe('MEDIUM')
+        ->and(Task::factory()->high()->make()->priority)->toBe('HIGH')
+        ->and(Task::factory()->low()->make()->priority)->toBe('LOW');
 });
 
 it('archives and restores a task with no active boards', function (): void {
@@ -108,6 +118,107 @@ it('creates, shows, and updates a task with a server-generated slug', function (
         ->assertJsonPath('data.description', null)
         ->assertJsonPath('data.status', 'done');
 });
+
+it('updates task priority from HIGH to LOW', function (): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+    $task = Task::factory()->high()->create(['project_id' => $project->id]);
+
+    Sanctum::actingAs($owner);
+
+    patchJson("/api/v1/projects/{$project->id}/tasks/{$task->id}", [
+        'priority' => 'LOW',
+    ])->assertOk()
+        ->assertJsonPath('data.priority', 'LOW');
+
+    expect($task->fresh()->priority)->toBe('LOW');
+});
+
+it('preserves HIGH priority when omitted on update', function (): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+    $task = Task::factory()->high()->create(['project_id' => $project->id]);
+
+    Sanctum::actingAs($owner);
+
+    patchJson("/api/v1/projects/{$project->id}/tasks/{$task->id}", [
+        'description' => 'Priority must remain unchanged.',
+    ])->assertOk()
+        ->assertJsonPath('data.priority', 'HIGH');
+
+    expect($task->fresh()->priority)->toBe('HIGH');
+});
+
+it('rejects invalid priority on update', function (mixed $priority): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+    $task = Task::factory()->high()->create(['project_id' => $project->id]);
+
+    Sanctum::actingAs($owner);
+
+    patchJson("/api/v1/projects/{$project->id}/tasks/{$task->id}", [
+        'priority' => $priority,
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors(['priority']);
+
+    expect($task->fresh()->priority)->toBe('HIGH');
+})->with([
+    'unsupported value' => 'URGENT',
+    'lowercase value' => 'high',
+    'null value' => null,
+]);
+
+it('creates and shows a task with HIGH priority', function (): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+
+    Sanctum::actingAs($owner);
+
+    $response = postJson("/api/v1/projects/{$project->id}/tasks", [
+        'name' => 'Handle production incident',
+        'priority' => 'HIGH',
+    ])->assertCreated()
+        ->assertJsonPath('data.priority', 'HIGH');
+
+    $taskId = $response->json('data.id');
+
+    getJson("/api/v1/projects/{$project->id}/tasks/{$taskId}")
+        ->assertOk()
+        ->assertJsonPath('data.priority', 'HIGH');
+
+    expect(Task::query()->findOrFail($taskId)->priority)->toBe('HIGH');
+});
+
+it('defaults task priority to MEDIUM when omitted on store', function (): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+
+    Sanctum::actingAs($owner);
+
+    $response = postJson("/api/v1/projects/{$project->id}/tasks", [
+        'name' => 'Plan routine maintenance',
+    ])->assertCreated()
+        ->assertJsonPath('data.priority', 'MEDIUM');
+
+    expect(Task::query()->findOrFail($response->json('data.id'))->priority)->toBe('MEDIUM');
+});
+
+it('rejects invalid priority on store', function (mixed $priority): void {
+    $owner = User::factory()->create();
+    $project = Project::factory()->forOwner($owner)->create();
+
+    Sanctum::actingAs($owner);
+
+    postJson("/api/v1/projects/{$project->id}/tasks", [
+        'name' => 'Invalid priority task',
+        'priority' => $priority,
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors(['priority']);
+})->with([
+    'unsupported value' => 'URGENT',
+    'lowercase value' => 'high',
+    'null value' => null,
+]);
 
 it('rejects invalid task payloads with a validation response', function (): void {
     $owner = User::factory()->create();

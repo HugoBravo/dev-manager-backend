@@ -26,6 +26,7 @@ final class TaskResource extends JsonResource
                 'slug' => $this->resource->slug,
                 'description' => $this->resource->description,
                 'status' => $this->resource->status,
+                'priority' => $this->resource->priority,
                 'archived_at' => optional($this->resource->archived_at)?->toIso8601String(),
                 'created_at' => optional($this->resource->created_at)?->toIso8601String(),
                 'updated_at' => optional($this->resource->updated_at)?->toIso8601String(),

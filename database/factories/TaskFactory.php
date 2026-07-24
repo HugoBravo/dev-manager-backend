@@ -29,8 +29,23 @@ class TaskFactory extends Factory
             'slug' => Str::slug($name),
             'description' => fake()->optional()->sentence(),
             'status' => 'open',
+            'priority' => 'MEDIUM',
             'archived_at' => null,
         ];
+    }
+
+    public function high(): static
+    {
+        return $this->state(fn (): array => [
+            'priority' => 'HIGH',
+        ]);
+    }
+
+    public function low(): static
+    {
+        return $this->state(fn (): array => [
+            'priority' => 'LOW',
+        ]);
     }
 
     public function archived(): static

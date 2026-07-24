@@ -39,6 +39,7 @@ final class UpdateTaskRequest extends FormRequest
             ],
             'description' => ['sometimes', 'nullable', 'string'],
             'status' => ['sometimes', 'string', Rule::in(['open', 'in_progress', 'done'])],
+            'priority' => ['sometimes', 'string', Rule::in(['HIGH', 'MEDIUM', 'LOW'])],
         ];
     }
 }
